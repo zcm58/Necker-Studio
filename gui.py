@@ -15,6 +15,7 @@ from tkinter import filedialog, messagebox, ttk
 
 if __package__:
     from . import runtime
+    from .participant import HANDEDNESS_KEY, HANDEDNESS_VALUES, SEX_VALUES, ParticipantError, validate_participant
     from .settings import (
         APP_DIR, CONDITION_CHOICES, CONDITION_COLUMNS, CONDITION_HELP,
         FIELD_SPECS, SETTINGS_PATH, default_settings, load_settings,
@@ -22,6 +23,7 @@ if __package__:
     )
 else:
     import runtime
+    from participant import HANDEDNESS_KEY, HANDEDNESS_VALUES, SEX_VALUES, ParticipantError, validate_participant
     from settings import (
         APP_DIR, CONDITION_CHOICES, CONDITION_COLUMNS, CONDITION_HELP,
         FIELD_SPECS, SETTINGS_PATH, default_settings, load_settings,
@@ -39,7 +41,6 @@ ACCENT = "#087e83"
 
 def _apply_theme(root: tk.Tk) -> None:
     root.configure(background=PAGE)
-    root.option_add("*Font", "{Segoe UI} 10")
     style = ttk.Style(root)
     style.theme_use("clam")
     style.configure(".", font=("Segoe UI", 10), foreground=INK)
@@ -60,11 +61,14 @@ def _apply_theme(root: tk.Tk) -> None:
     style.map("Primary.TButton", background=[("disabled", "#c4d4d9"), ("active", "#05666b")],
               foreground=[("disabled", "#53677d")])
     style.configure("TEntry", padding=7, fieldbackground=SURFACE)
+    style.map("TEntry", fieldbackground=[("disabled", "#e4e8ed")],
+              foreground=[("disabled", "#687585")])
     style.configure("TCombobox", padding=6, fieldbackground=SURFACE)
     style.configure("TCheckbutton", background=PAGE, padding=(0, 4))
     style.configure("TNotebook", background=PAGE, borderwidth=0)
     style.configure("TNotebook.Tab", padding=(12, 8))
     style.map("TNotebook.Tab", background=[("selected", SURFACE)])
+    style.layout("Sections.TNotebook.Tab", [])
     style.configure("Treeview", background=SURFACE, fieldbackground=SURFACE, rowheight=29)
     style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"), padding=6)
     style.map("Treeview", background=[("selected", "#d8eeee")],
@@ -107,6 +111,19 @@ class ScrollFrame(ttk.Frame):
         self.content.bind("<Configure>", self._resize_content)
         self.canvas.bind("<Configure>", self._resize_canvas)
         self.winfo_toplevel().bind("<MouseWheel>", self._wheel, add="+")
+        self.winfo_toplevel().bind("<FocusIn>", self._reveal_focus, add="+")
+
+    def _reveal_focus(self, event: tk.Event) -> None:
+        if not self.winfo_exists() or not str(event.widget).startswith(str(self.content) + "."):
+            return
+        widget = event.widget
+        top = widget.winfo_rooty() - self.content.winfo_rooty()
+        visible_top = self.canvas.canvasy(0)
+        height = self.canvas.winfo_height()
+        bottom = top + widget.winfo_height()
+        target = top - 8 if top < visible_top else bottom - height + 8
+        if top < visible_top or bottom > visible_top + height:
+            self.canvas.yview_moveto(max(0, target) / max(1, self.content.winfo_height()))
 
     def _resize_content(self, _event: tk.Event) -> None:
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
@@ -124,6 +141,159 @@ class ScrollFrame(ttk.Frame):
         return "break"
 
 
+class FlowButtons(ttk.Frame):
+    """Wrap actions onto another row when screen scaling leaves less space."""
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.buttons = []
+        self.bind("<Configure>", self._layout)
+
+    def add(self, text, command, **kwargs):
+        button = ttk.Button(self, text=text, command=command, **kwargs)
+        self.buttons.append(button)
+        self.after_idle(self._layout)
+        return button
+
+    def _layout(self, _event=None):
+        if not self.winfo_exists():
+            return
+        available = max(1, self.winfo_width() - 36)
+        row = column = used = 0
+        for button in self.buttons:
+            width = button.winfo_reqwidth() + 8
+            if used and used + width > available:
+                row, column, used = row + 1, 0, 0
+            button.grid(row=row, column=column, sticky="w", padx=(0, 8), pady=3)
+            column += 1
+            used += width
+
+
+def _section_selector(parent, notebook, labels):
+    selector = ttk.Combobox(parent, values=labels, state="readonly", width=1)
+    selector.pack(fill="x", pady=(8, 10))
+    selector.current(0)
+    selector.bind("<<ComboboxSelected>>", lambda _event: notebook.select(selector.current()))
+    notebook.bind("<<NotebookTabChanged>>", lambda _event: selector.current(notebook.index("current")))
+    return selector
+
+
+class ParticipantDialog(tk.Toplevel):
+    """Fresh, validated demographics for each click of Launch Experiment."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.result = None
+        self.title("Participant Information")
+        self.configure(background=PAGE)
+        self.transient(parent)
+        _fit_window(self, 700, 690)
+        footer = FlowButtons(self, padding=(18, 8, 18, 12))
+        footer.pack(side="bottom", fill="x")
+        self.continue_button = footer.add("Continue", self.accept, style="Primary.TButton")
+        footer.add("Cancel", self.destroy)
+        scroll = ScrollFrame(self)
+        scroll.pack(fill="both", expand=True, padx=18, pady=12)
+        content = scroll.content
+        content.columnconfigure(0, weight=1)
+        self.variables = {}
+        self.controls = {}
+        fields = (
+            ("participant_ID", "Participant number — digits only (for example, 0012)", None),
+            ("age", "Age — whole number from 1 to 120", None),
+            ("sex", "Sex", SEX_VALUES),
+            (HANDEDNESS_KEY, "Handedness", HANDEDNESS_VALUES),
+            ("colorblind", "Colorblind", ("No", "Yes")),
+            ("manual_removed_electrodes", "Manually removed electrodes (optional)", None),
+        )
+        labels = []
+        for index, (key, label, choices) in enumerate(fields):
+            caption = ttk.Label(content, text=label, wraplength=550)
+            caption.grid(row=index * 2, column=0, sticky="ew", pady=(10, 4))
+            labels.append(caption)
+            variable = self.variables[key] = tk.StringVar(self)
+            if choices:
+                control = ttk.Combobox(content, textvariable=variable, values=choices, state="readonly", width=1)
+            else:
+                control = ttk.Entry(content, textvariable=variable, width=1)
+                if key in {"participant_ID", "age"}:
+                    check = self.register(lambda value: not value or (value.isascii() and value.isdigit()))
+                    control.configure(validate="key", validatecommand=(check, "%P"))
+            control.grid(row=index * 2 + 1, column=0, sticky="ew")
+            self.controls[key] = control
+        hint = ttk.Label(content, text="Enter electrodes physically removed before recording, separated by commas (for example, FT7, P9, Oz).", style="Muted.TLabel", wraplength=550)
+        hint.grid(row=12, column=0, sticky="ew", pady=(8, 0))
+        labels.append(hint)
+        self.error_text = tk.StringVar(self)
+        error = ttk.Label(self, textvariable=self.error_text, foreground="#9a3412", wraplength=550)
+        error.pack(side="bottom", fill="x", padx=24, pady=(0, 8), before=scroll)
+        error.bind("<Configure>", lambda event: error.configure(wraplength=max(80, event.width)))
+        content.bind("<Configure>", lambda event: [label.configure(wraplength=max(80, event.width - 20)) for label in labels], add="+")
+        self.bind("<Escape>", lambda _event: self.destroy())
+        self.bind("<Return>", lambda _event: self.accept())
+        self.grab_set()
+        self.after_idle(self.controls["participant_ID"].focus_set)
+
+    def accept(self):
+        values = {key: variable.get() for key, variable in self.variables.items()}
+        values["colorblind"] = {"No": False, "Yes": True}.get(values["colorblind"])
+        try:
+            self.result = validate_participant(values)
+        except ParticipantError as exc:
+            self.error_text.set(str(exc))
+            self.controls[exc.field].focus_set()
+            return
+        self.destroy()
+
+    def show(self):
+        self.wait_window()
+        return self.result
+
+
+class BioSemiRecordingConfirmationDialog(tk.Toplevel):
+    """FPVS Sophia Mode: a new typed operator confirmation for every launch."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.result = False
+        self.title("Sophia Mode Recording Check")
+        self.configure(background=PAGE)
+        self.transient(parent)
+        _fit_window(self, 700, 470)
+        footer = FlowButtons(self, padding=(18, 8, 18, 12))
+        footer.pack(side="bottom", fill="x")
+        self.continue_button = footer.add("Continue", self.accept, style="Primary.TButton", state="disabled")
+        footer.add("Cancel", self.destroy)
+        scroll = ScrollFrame(self)
+        scroll.pack(fill="both", expand=True, padx=20, pady=20)
+        prompt = ttk.Label(scroll.content, text="NERD Lab Administrator: Sophia Mode is enabled. Confirm that the BioSemi PC is recording data, then type 'Confirm' to continue.", wraplength=600)
+        prompt.pack(fill="x", pady=(0, 18))
+        ttk.Label(scroll.content, text="Type Confirm to continue").pack(anchor="w", pady=(0, 6))
+        self.confirmation = tk.StringVar(self)
+        self.entry = ttk.Entry(scroll.content, textvariable=self.confirmation, width=1)
+        self.entry.pack(fill="x")
+        note = ttk.Label(scroll.content, text="This records your confirmation; it does not detect the BioSemi recording state automatically.", style="Muted.TLabel", wraplength=600)
+        note.pack(fill="x", pady=(14, 0))
+        scroll.content.bind("<Configure>", lambda event: [label.configure(wraplength=max(80, event.width - 20)) for label in (prompt, note)], add="+")
+        self.confirmation.trace_add("write", lambda *_args: self.continue_button.configure(state="normal" if self.matches() else "disabled"))
+        self.bind("<Return>", lambda _event: self.accept())
+        self.bind("<Escape>", lambda _event: self.destroy())
+        self.grab_set()
+        self.after_idle(self.entry.focus_set)
+
+    def matches(self):
+        return self.confirmation.get().strip().casefold() == "confirm"
+
+    def accept(self):
+        if self.matches():
+            self.result = True
+            self.destroy()
+
+    def show(self):
+        self.wait_window()
+        return self.result
+
+
 class ConditionEditor(ttk.Frame):
     """A staged condition-table editor; no workbook changes are needed."""
 
@@ -139,7 +309,7 @@ class ConditionEditor(ttk.Frame):
         table_frame.pack(fill="both", expand=True)
         table_frame.rowconfigure(0, weight=1)
         table_frame.columnconfigure(0, weight=1)
-        self.table = ttk.Treeview(table_frame, columns=self.columns, show="headings", selectmode="browse")
+        self.table = ttk.Treeview(table_frame, columns=self.columns, show="headings", selectmode="browse", height=7)
         for column in self.columns:
             self.table.heading(column, text=column)
             self.table.column(column, width=145 if column in {"image", "Sound"} else 95, minwidth=75)
@@ -151,15 +321,15 @@ class ConditionEditor(ttk.Frame):
         self.table.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
         self.table.bind("<Double-1>", lambda _event: self.edit_row())
         self.table.bind("<Return>", lambda _event: self.edit_row())
-        actions = ttk.Frame(self)
+        actions = FlowButtons(self)
         actions.pack(fill="x", pady=(10, 0))
-        ttk.Button(actions, text="Edit row…", command=self.edit_row).pack(side="left")
+        actions.add("Edit row…", self.edit_row)
         if filename != "SoundEx.xlsx":
-            ttk.Button(actions, text="Add", command=self.add_row).pack(side="left", padx=(7, 0))
-            ttk.Button(actions, text="Duplicate", command=self.duplicate_row).pack(side="left", padx=(7, 0))
-            ttk.Button(actions, text="Remove", command=self.remove_row).pack(side="left", padx=(7, 0))
-        ttk.Button(actions, text="↑", width=3, command=lambda: self.move_row(-1)).pack(side="right", padx=(7, 0))
-        ttk.Button(actions, text="↓", width=3, command=lambda: self.move_row(1)).pack(side="right")
+            actions.add("Add", self.add_row)
+            actions.add("Duplicate", self.duplicate_row)
+            actions.add("Remove", self.remove_row)
+        actions.add("↑", lambda: self.move_row(-1), width=3)
+        actions.add("↓", lambda: self.move_row(1), width=3)
         help_text = "Image and sound paths are relative to the assets folder, or may be absolute paths."
         if filename == "SoundEx.xlsx":
             help_text += " Four demonstration rows are required; the last row is the Go example."
@@ -200,25 +370,26 @@ class ConditionEditor(ttk.Frame):
         _fit_window(dialog, 650, 530)
         scroll = ScrollFrame(dialog)
         scroll.pack(fill="both", expand=True, padx=16, pady=12)
-        scroll.content.columnconfigure(1, weight=1)
+        scroll.content.columnconfigure(0, weight=1)
         variables = {}
         for row_index, column in enumerate(self.columns):
-            ttk.Label(scroll.content, text=column).grid(row=row_index, column=0, sticky="w", padx=(0, 12), pady=7)
+            ttk.Label(scroll.content, text=column).grid(row=row_index * 2, column=0, columnspan=2, sticky="w", pady=(8, 4))
             variable = tk.StringVar(dialog, value=_display(source.get(column)))
             variables[column] = variable
             if column in CONDITION_CHOICES:
                 entry = ttk.Combobox(scroll.content, textvariable=variable,
-                                     values=CONDITION_CHOICES[column], state="readonly")
+                                     values=CONDITION_CHOICES[column], state="readonly", width=1)
             else:
-                entry = ttk.Entry(scroll.content, textvariable=variable)
-            entry.grid(row=row_index, column=1, sticky="ew", pady=7)
+                entry = ttk.Entry(scroll.content, textvariable=variable, width=1)
+            entry.grid(row=row_index * 2 + 1, column=0, sticky="ew")
             if column in {"image", "Sound", "choice"}:
                 ttk.Button(scroll.content, text="Browse…", command=lambda v=variable: self._browse_asset(v, dialog)).grid(
-                    row=row_index, column=2, padx=(7, 0))
-        ttk.Label(scroll.content, text="delay: seconds. choice: choice-screen image. correct: Left or Right.\n"
+                    row=row_index * 2 + 1, column=1, padx=(7, 0))
+        hint = ttk.Label(scroll.content, text="delay: seconds. choice: choice-screen image. correct: Left or Right.\n"
                   "GoNoGo: space or None. ISI is unused; blank preserves the original value.",
-                  style="Muted.TLabel", wraplength=500).grid(row=len(self.columns), column=0,
-                                                             columnspan=3, sticky="w", pady=12)
+                  style="Muted.TLabel", wraplength=500)
+        hint.grid(row=len(self.columns) * 2, column=0, columnspan=2, sticky="ew", pady=12)
+        scroll.content.bind("<Configure>", lambda event: hint.configure(wraplength=max(80, event.width - 20)), add="+")
 
         def apply() -> None:
             value = {column: variable.get().strip() for column, variable in variables.items()}
@@ -243,7 +414,7 @@ class ConditionEditor(ttk.Frame):
             self.winfo_toplevel().grab_set()
 
         footer = ttk.Frame(dialog, padding=(16, 8, 16, 16))
-        footer.pack(fill="x")
+        footer.pack(side="bottom", fill="x", before=scroll)
         ttk.Button(footer, text="Apply row", style="Primary.TButton", command=apply).pack(side="right")
         ttk.Button(footer, text="Cancel", command=close).pack(side="right", padx=(0, 8))
         dialog.protocol("WM_DELETE_WINDOW", close)
@@ -302,7 +473,7 @@ class SettingsDialog(tk.Toplevel):
         header.pack(fill="x")
         ttk.Label(header, text="Experiment settings", font=("Segoe UI", 19, "bold")).pack(anchor="w")
         ttk.Label(header, text="Saved settings apply to the next session.", style="Muted.TLabel").pack(anchor="w", pady=(4, 0))
-        self.notebook = ttk.Notebook(self)
+        self.notebook = ttk.Notebook(self, style="Sections.TNotebook")
         self.notebook.pack(fill="both", expand=True, padx=18)
         groups: dict[str, ScrollFrame] = {}
         for spec in FIELD_SPECS:
@@ -311,44 +482,61 @@ class SettingsDialog(tk.Toplevel):
                 groups[group] = ScrollFrame(self.notebook)
                 self.notebook.add(groups[group], text=group)
             self._field(groups[group].content, spec)
-        conditions = ttk.Notebook(self.notebook)
-        self.notebook.add(conditions, text="Conditions")
+        conditions_page = ScrollFrame(self.notebook)
+        self.notebook.add(conditions_page, text="Conditions")
+        conditions = ttk.Notebook(conditions_page.content, style="Sections.TNotebook")
+        _section_selector(conditions_page.content, conditions, [name.removesuffix(".xlsx") for name in CONDITION_COLUMNS])
+        conditions.pack(fill="both", expand=True)
         for filename in CONDITION_COLUMNS:
             editor = ConditionEditor(conditions, filename, self.draft["conditions"][filename])
             self.editors[filename] = editor
             conditions.add(editor, text=filename.removesuffix(".xlsx"))
-        footer = ttk.Frame(self, padding=(18, 12, 18, 16))
-        footer.pack(fill="x")
-        ttk.Button(footer, text="Restore defaults", command=self.restore_defaults).pack(side="left")
-        ttk.Button(footer, text="Save settings", style="Primary.TButton", command=self.save).pack(side="right")
-        ttk.Button(footer, text="Cancel", command=self.destroy).pack(side="right", padx=(0, 8))
+        self.section_selector = _section_selector(header, self.notebook, list(groups) + ["Conditions"])
+        footer = self.footer = FlowButtons(self, padding=(18, 12, 18, 16))
+        footer.pack(side="bottom", fill="x", before=self.notebook)
+        footer.add("Save settings", self.save, style="Primary.TButton")
+        footer.add("Cancel", self.destroy)
+        footer.add("Restore defaults", self.restore_defaults)
         self.bind("<Escape>", lambda _event: self.destroy())
         self.grab_set()
 
     def _field(self, parent: ttk.Frame, spec: dict) -> None:
         frame = ttk.Frame(parent, padding=(12, 8))
         frame.pack(fill="x")
-        frame.columnconfigure(1, weight=1)
+        frame.columnconfigure(0, weight=1)
         key, kind = spec["key"], spec["kind"]
         variable = (tk.BooleanVar(self, value=self.draft[key]) if kind == "bool"
                     else tk.StringVar(self, value=_display(self.draft[key])))
         self.variables[key] = variable
+        labels = []
         if kind == "bool":
-            ttk.Checkbutton(frame, text=spec["label"], variable=variable).grid(row=0, column=0, columnspan=3, sticky="w")
+            frame.columnconfigure(0, weight=0)
+            frame.columnconfigure(1, weight=1)
+            ttk.Checkbutton(frame, variable=variable).grid(row=0, column=0, sticky="nw")
+            label = ttk.Label(frame, text=spec["label"], wraplength=500)
+            label.grid(row=0, column=1, sticky="ew")
+            label.bind("<Button-1>", lambda _event: variable.set(not variable.get()))
+            labels.append(label)
         else:
-            ttk.Label(frame, text=spec["label"], width=29, wraplength=210).grid(row=0, column=0, sticky="w", padx=(0, 14))
+            label = ttk.Label(frame, text=spec["label"], wraplength=500)
+            label.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 5))
+            labels.append(label)
             if spec.get("choices"):
-                control = ttk.Combobox(frame, textvariable=variable, values=spec["choices"], state="readonly")
+                control = ttk.Combobox(frame, textvariable=variable, values=spec["choices"], state="readonly", width=1)
             else:
-                control = ttk.Entry(frame, textvariable=variable)
-            control.grid(row=0, column=1, sticky="ew")
+                control = ttk.Entry(frame, textvariable=variable, width=1)
+            if key == "serial_port":
+                control.configure(state="disabled", takefocus=False)
+                self.serial_port_control = control
+            control.grid(row=1, column=0, sticky="ew")
             if kind in {"path", "directory", "file"} or key in {"psychopy_python", "output_dir"}:
                 ttk.Button(frame, text="Browse…", command=lambda k=key, v=variable, s=spec: self._browse(k, v, s)).grid(
-                    row=0, column=2, padx=(8, 0))
+                    row=1, column=1, padx=(8, 0))
         if spec.get("help"):
             label = ttk.Label(frame, text=spec["help"], style="Muted.TLabel", wraplength=720)
-            label.grid(row=1, column=0, columnspan=3, sticky="w", pady=(5, 0))
-            frame.bind("<Configure>", lambda event, item=label: item.configure(wraplength=max(240, event.width - 24)))
+            label.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+            labels.append(label)
+        frame.bind("<Configure>", lambda event: [label.configure(wraplength=max(80, event.width - 60)) for label in labels])
 
     def _browse(self, key: str, variable: tk.Variable, spec: dict) -> None:
         if key == "output_dir" or spec["kind"] == "directory":
@@ -419,7 +607,6 @@ class NeckerApp(tk.Tk):
         self.status = tk.StringVar(self, "Ready to start a session.")
         self.output_text = tk.StringVar(self)
         self.setup_text = tk.StringVar(self)
-        self.participant = {key: tk.StringVar(self) for key in ("participant_ID", "age", "sex", "handedness (left or right)")}
         self._create_menu()
         self._create_page()
         self.refresh_summary()
@@ -448,7 +635,7 @@ class NeckerApp(tk.Tk):
         if subtitle:
             label = ttk.Label(content, text=subtitle, style="CardMuted.TLabel", wraplength=780)
             label.pack(anchor="w", pady=(5, 0))
-            content.bind("<Configure>", lambda event: label.configure(wraplength=max(240, event.width - 36)), add="+")
+            content.bind("<Configure>", lambda event: label.configure(wraplength=max(240, event.width - 44)), add="+")
         return content
 
     def _create_page(self) -> None:
@@ -463,20 +650,6 @@ class NeckerApp(tk.Tk):
         scroll = ScrollFrame(self)
         scroll.pack(fill="both", expand=True, padx=(20, 14))
         self._main_scroll = scroll
-        participant_card = self._card(scroll.content, "Participant", "Enter the session details before starting.")
-        fields = ttk.Frame(participant_card, style="Card.TFrame")
-        fields.pack(fill="x", pady=(14, 0))
-        self.participant_controls = []
-        for index, (key, label) in enumerate((("participant_ID", "Participant ID"), ("age", "Age"),
-                                             ("sex", "Sex"), ("handedness (left or right)", "Handedness"))):
-            fields.columnconfigure(index, weight=1, uniform="participants")
-            ttk.Label(fields, text=label, style="Card.TLabel").grid(row=0, column=index, sticky="w", padx=(0, 10))
-            if key.startswith("handedness"):
-                control = ttk.Combobox(fields, textvariable=self.participant[key], values=("left", "right"), width=10)
-            else:
-                control = ttk.Entry(fields, textvariable=self.participant[key], width=10)
-            control.grid(row=1, column=index, sticky="ew", padx=(0, 10), pady=(6, 0))
-            self.participant_controls.append(control)
         summary = self._card(scroll.content, "Session sequence", "The original four stages, presented with PsychoPy.")
         metrics = ttk.Frame(summary, style="Card.TFrame")
         metrics.pack(fill="x", pady=(12, 5))
@@ -495,15 +668,15 @@ class NeckerApp(tk.Tk):
         ttk.Separator(summary).pack(fill="x", pady=12)
         setup = ttk.Label(summary, textvariable=self.setup_text, style="CardMuted.TLabel", wraplength=780)
         setup.pack(anchor="w")
-        summary.bind("<Configure>", lambda event: setup.configure(wraplength=max(240, event.width - 36)), add="+")
+        summary.bind("<Configure>", lambda event: setup.configure(wraplength=max(240, event.width - 44)), add="+")
         run = self._card(scroll.content, "Run session")
-        run_help = ttk.Label(run, text="Use File > Settings to adjust the experiment. Press Escape in the experiment to stop.",
+        run_help = ttk.Label(run, text="Launch Experiment opens the participant form, followed by the Sophia Mode recording check when enabled. Use File > Settings to adjust the experiment. Press Escape in the experiment to stop.",
                             style="CardMuted.TLabel", wraplength=590)
         run_help.pack(anchor="w", pady=(5, 14))
-        run.bind("<Configure>", lambda event: run_help.configure(wraplength=max(240, event.width - 36)))
+        run.bind("<Configure>", lambda event: run_help.configure(wraplength=max(240, event.width - 44)))
         actions = ttk.Frame(run, style="Card.TFrame")
         actions.pack(fill="x")
-        self.start_button = ttk.Button(actions, text="Start session", style="Primary.TButton", command=self.start)
+        self.start_button = ttk.Button(actions, text="Launch Experiment", style="Primary.TButton", command=self.start)
         self.start_button.pack(side="left")
         self.stop_button = ttk.Button(actions, text="Stop session", command=self.stop, state="disabled")
         self.stop_button.pack(side="left", padx=8)
@@ -512,7 +685,7 @@ class NeckerApp(tk.Tk):
         output = self._card(scroll.content, "Session output")
         output_label = ttk.Label(output, textvariable=self.output_text, style="CardMuted.TLabel", wraplength=750)
         output_label.pack(anchor="w", pady=(6, 10))
-        output.bind("<Configure>", lambda event: output_label.configure(wraplength=max(240, event.width - 36)), add="+")
+        output.bind("<Configure>", lambda event: output_label.configure(wraplength=max(240, event.width - 44)), add="+")
         ttk.Button(output, text="Open output folder", command=self.open_output).pack(anchor="w")
         footer = ttk.Frame(self, padding=(24, 10, 24, 12))
         footer.pack(fill="x")
@@ -555,23 +728,43 @@ class NeckerApp(tk.Tk):
         self.start_button.configure(state="disabled" if busy else "normal")
         self.settings_button.configure(state="disabled" if busy else "normal")
         self.file_menu.entryconfigure(0, state="disabled" if busy else "normal")
-        for control in self.participant_controls:
-            control.configure(state="disabled" if busy else "normal")
+
+    def _participant_details(self):
+        return ParticipantDialog(self).show()
+
+    def _confirm_recording(self):
+        return BioSemiRecordingConfirmationDialog(self).show()
 
     def start(self) -> None:
         if self.busy:
             return
-        participant = {key: value.get().strip() for key, value in self.participant.items()}
+        self._launching = True
+        self._set_busy(True)
+        try:
+            config = validate_settings(copy.deepcopy(self.config))
+            participant = self._participant_details()
+            if participant is None:
+                self.status.set("Launch cancelled. No session was started.")
+                return
+            recording_confirmed = config["sophia_mode"] and self._confirm_recording()
+            if config["sophia_mode"] and not recording_confirmed:
+                self.status.set("Launch cancelled at the BioSemi recording check.")
+                return
+        except ValueError as exc:
+            messagebox.showerror("Unable to start session", str(exc), parent=self)
+            return
+        finally:
+            self._launching = False
+            self._set_busy(False)
         self._launching = True
         self._stop_requested = False
         self._set_busy(True)
         self.badge.configure(text="STARTING", foreground="#0c4a6e", background="#e0f2fe")
         self.status.set("Checking the PsychoPy engine and preparing the session…")
-        config = copy.deepcopy(self.config)
 
         def launch() -> None:
             try:
-                self._events.put(("started", runtime.start_session(config, participant)))
+                self._events.put(("started", runtime.start_session(config, participant, recording_confirmed=recording_confirmed)))
             except Exception as exc:
                 self._events.put(("error", str(exc)))
 

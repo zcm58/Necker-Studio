@@ -19,6 +19,7 @@ APP_DIR = Path(__file__).resolve().parent
 SETTINGS_PATH = APP_DIR / "settings.json"
 DEFAULTS_PATH = APP_DIR / "defaults.json"
 ASSETS_DIR = APP_DIR / "assets"
+SERIAL_PORT = "COM3"
 
 
 def _field(key, label, group, kind, default, minimum=None, maximum=None, help="", choices=None):
@@ -33,7 +34,9 @@ FIELD_SPECS = [
     _field("psychopy_python", "PsychoPy Python", "General", "file", "",
            help="Leave blank to find an installed PsychoPy Python automatically, or choose its python.exe."),
     _field("output_dir", "Results folder", "General", "directory", "data",
-           help="Relative folders are inside Necker Studio. Created when a session starts."),
+           help="Saved across launches. Relative folders are inside Necker Studio. Each session creates its own folder here."),
+    _field("sophia_mode", "Sophia Mode: confirm BioSemi recording", "General", "bool", True,
+           help="Before each launch, require the administrator to check that BioSemi is recording and type Confirm. This is an operator check, not automatic recording detection."),
     _field("full_screen", "Full screen", "Display", "bool", True,
            help="Present the experiment full screen, as in the reference project."),
     _field("window_width", "Window width (pixels)", "Display", "int", 1920, 64, 16384,
@@ -52,7 +55,8 @@ FIELD_SPECS = [
     _field("volume", "Sound volume (0–1)", "Audio & triggers", "float", 1.0, 0, 1),
     _field("serial_enabled", "Enable serial triggers", "Audio & triggers", "bool", True,
            help="Enabled in the reference. Disable only for sessions that do not use the trigger device."),
-    _field("serial_port", "Serial port", "Audio & triggers", "str", "COM3"),
+    _field("serial_port", "Serial port (locked)", "Audio & triggers", "str", SERIAL_PORT,
+           help="Fixed to COM3 for this experiment; this field cannot be edited."),
     _field("serial_baud", "Serial baud rate", "Audio & triggers", "int", 115200, 1, 4000000),
     _field("practice_reps", "Practice repetitions", "Trial counts", "int", 1, 0, 10000,
            "Repetitions of all ambiguous-cube conditions; original default is 8 practice trials."),
@@ -190,6 +194,8 @@ def validate_settings(config: dict[str, Any]) -> dict[str, Any]:
                         raise ValueError(f"{label} must be a directory: {directory}")
                 except OSError as exc:
                     raise ValueError(f"{label} is not a valid directory path: {value}") from exc
+    if result["serial_port"] != SERIAL_PORT:
+        raise ValueError(f"Serial port is locked to {SERIAL_PORT} for this experiment.")
     if (result["monitor_width_cm"] == "") != (result["monitor_distance_cm"] == ""):
         raise ValueError("Set both monitor width and viewing distance, or leave both blank to use the saved monitor calibration.")
     if result["blank_min_frames"] >= result["blank_max_frames"]:
@@ -249,6 +255,10 @@ def load_settings(path=SETTINGS_PATH) -> dict[str, Any]:
     except (OSError, ValueError) as exc:
         raise ValueError(f"Cannot read settings at {path}: {exc}") from exc
     try:
+        # Add this new launch safeguard to older saved configurations without
+        # resetting the output directory, calibration, or protocol settings.
+        if isinstance(config, dict) and config.get("schema_version") == 1:
+            config.setdefault("sophia_mode", True)
         return validate_settings(config)
     except ValueError as exc:
         raise ValueError(f"Invalid settings in {path}: {exc}") from exc

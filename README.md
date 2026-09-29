@@ -11,7 +11,11 @@ This machine's project is **C:\Users\zcm58\PyCharmProjects\Necker-Studio**.
 
 The project interpreter is **.venv\Scripts\python.exe**, running **Python 3.12.14** with **PsychoPy 2026.2.4**. Python itself lives in the project's ignored `.python` folder. Dependencies are installed in `.venv`; system site-packages are disabled. The launcher automatically prefers this local environment, including when main.py is launched by another Python installation.
 
-The File > Settings dialog configures the experiment. No source, JSON, or spreadsheet edits are required. Serial remains enabled on COM3 by default; select the acquisition port or disable serial explicitly for a session without that hardware.
+The File > Settings dialog configures the experiment. No source, JSON, or spreadsheet edits are required. Serial is enabled on COM3 by default. The port is locked; disable serial explicitly for a session without that hardware.
+
+Click **Launch Experiment** to open **Participant Information**. Like FPVS Studio, it requires a digits-only participant number (leading zeroes are retained), a whole-number age from 1 to 120, and selections for sex, handedness, and colorblind status. Sex offers Female/Male; handedness offers Right handed/Left handed/Ambidextrous. Optional manually removed electrodes are normalized and saved with the session. Participant details are requested afresh on every launch.
+
+**Sophia Mode is enabled by default.** After demographics, the administrator must check that the BioSemi PC is recording and type **Confirm**. This is the same typed operator acknowledgment used in FPVS Studio; it does not automatically detect recording. Cancelling either dialog leaves the experiment stopped. The worker also rejects missing confirmation before opening PsychoPy or COM3. The confirmation is saved with that session and never reused for a later launch. Sophia Mode can be explicitly disabled in General settings for runs that do not require recording.
 
 ## Recreate the environment on Windows
 
@@ -27,11 +31,13 @@ The Windows `pyWinhook` dependency does not publish CPython 3.12 wheels on PyPI.
 
 Settings are edited through the interface and saved automatically when **Save settings** is pressed. Cancel leaves the previous configuration intact. **Restore defaults** stages the original values; press Save to apply them. No Python, JSON, or spreadsheet editing is required.
 
-| Tab | Controls |
+The results folder persists across launches in the project's local `settings.json`, independently of PyCharm's working directory. Existing saved settings gain Sophia Mode without resetting the results folder, calibration, or protocol values. Settings use a section selector, wrapping labels, scrolling pages, and a fixed action area so controls remain accessible at smaller window sizes and larger text sizes. COM3 is greyed out and cannot be edited.
+
+| Section | Controls |
 | --- | --- |
-| General | PsychoPy interpreter and output directory |
+| General | PsychoPy interpreter, output directory, Sophia Mode |
 | Display | Full screen, display number, pixel dimensions, monitor calibration, cube size in degrees |
-| Audio & triggers | Volume, serial enable/disable, COM port, baud rate |
+| Audio & triggers | Volume, serial enable/disable, locked COM3 port, baud rate |
 | Trial counts | Practice, baseline, conditioning, final-measurement blocks/repetitions and demonstrations |
 | Timing | Exposure, routine/response durations, fixation, blank-frame bounds, tone duration |
 | Conditions | Edit, add, duplicate, remove, reorder, and browse stimuli for condition rows |
@@ -40,7 +46,7 @@ The demonstration table retains exactly four rows because the reference uses the
 
 Stimuli are specified in visual degrees. By default the app uses the existing `testMonitor` calibration. If it is missing or incomplete, choose a calibrated monitor profile or enter the measured monitor width, viewing distance, and display pixel dimensions in Settings. Calibration overrides apply to this app's sessions without changing the saved PsychoPy monitor profile.
 
-Serial triggers are enabled by default on **COM3 at 115200 baud**, matching the source. Disable them explicitly for sessions without the trigger device. Another program can still prevent access by holding the port; the app reports that case with instructions to close the program or select another port.
+Serial triggers are enabled by default on **COM3 at 115200 baud**, matching the source. Disable them explicitly for sessions without the trigger device. Another program can still prevent access by holding the port; the app reports that case with instructions to close the other program and check the connection. The port is fixed to COM3 in both the interface and settings validation.
 
 ## Default protocol
 
@@ -75,17 +81,17 @@ The app runs a bundled, checksum-checked Python export instead of asking Builder
 Each run gets a unique directory inside the selected output folder. By default this is `data/session_<participant>_<timestamp>/`.
 
 - `data/`: original PsychoPy wide CSV, `.psydat`, and `.log` outputs.
-- `session.json`: the exact settings and condition rows used, participant metadata, and selected interpreter.
+- `session.json`: the exact settings and condition rows used, participant metadata, BioSemi operator confirmation, and selected interpreter.
 - `runner.log`: startup and runtime diagnostics.
 - `result.json`: completion/abort/failure status and data filename.
 
-The **Open output folder** and **Open run log** buttons provide access. A stop or runtime error attempts to save all data collected so far. Participant IDs are preserved in metadata and sanitized only for filenames. Existing participant data in the original project is untouched.
+The **Open output folder** and **View run log** buttons provide access. A stop or runtime error attempts to save all data collected so far. The participant number, age, sex, and handedness retain their original Necker column names; colorblind status, removed electrodes, and recording confirmation are additional metadata. Existing participant data in the original project is untouched.
 
 ## Verification and maintenance
 
 Run the automated tests with `python -m unittest discover -s tests -v` from this folder. The tests do not require PsychoPy, a display, or serial hardware. They cover the protocol, condition fixtures, timing changes, response semantics, saved settings, invalid settings, output isolation, audio compatibility, and the exclusive-port regression.
 
-Four additional Tk interface tests are opt-in: set `NECKER_GUI_SMOKE=1` in the test run's environment. They briefly open windows but never launch an experiment or contact hardware. All **42 tests**, including these interface tests, passed on the development machine.
+Ten additional Tk interface tests are opt-in: set `NECKER_GUI_SMOKE=1` in the test run's environment. They briefly open windows but never launch an experiment or contact hardware. All **55 tests**, including these interface tests, passed on the development machine. Coverage includes saved-folder migration, locked COM3, required demographics, fresh typed recording confirmation, cancellation, and settings at minimum size and with larger text.
 
 Validation on **Python 3.12.14 with PsychoPy 2026.2.4** included a complete accelerated 30-trial session plus four demonstrations with simulated responses. All phases completed, outputs were saved, and the process exited successfully. Earlier validation also included the Tk settings/run-state interface, a real PsychoPy startup with cooperative abort and saved data. The complete session produced CSV, psydat, and log files and reached the thanks screen. Test output is separate from participant output. The full-screen layout was also checked at 1920×1080: captured instruction and recap frames contained all text and artwork without clipping. The earlier 800×600 smoke window was too small for the original layout; full screen remains the default. Physical COM3 trigger delivery and laboratory audiovisual timing have not been measured.
 

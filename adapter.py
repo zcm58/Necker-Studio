@@ -42,8 +42,9 @@ class SerialConnection:
         except Exception as exc:
             raise RuntimeError(
                 f"Could not open {self.config['serial_port']}: {exc}\n"
-                "Close any other program using this port, select the correct port "
-                "in File > Settings, or disable serial triggers for a practice run."
+                "Close any other program using COM3 and check the trigger device connection. "
+                "The port is locked to COM3. Disable serial triggers in File > Settings "
+                "only for a session without the trigger device."
             ) from exc
         return self.handle
 

@@ -15,8 +15,10 @@ from pathlib import Path
 
 if __package__:
     from .settings import APP_DIR, condition_rows, validate_settings
+    from .participant import validate_participant, require_recording_confirmation
 else:
     from settings import APP_DIR, condition_rows, validate_settings
+    from participant import validate_participant, require_recording_confirmation
 
 
 def output_directory(config):
@@ -77,11 +79,11 @@ class SessionHandle:
         self.stop_path.touch()
 
 
-def start_session(config, participant):
+def start_session(config, participant, *, recording_confirmed=False):
     config = validate_settings(config)
+    info = validate_participant(participant)
+    require_recording_confirmation(config, recording_confirmed)
     engine = discover_python(config)
-    fields = ('participant_ID', 'age', 'sex', 'handedness (left or right)')
-    info = {key: str(participant.get(key, '')).strip() for key in fields}
     # Preserve the actual ID in metadata while preventing path traversal and
     # Windows reserved filenames in the output path.
     safe_id = re.sub(r'[^\w.-]+', '_', info['participant_ID'], flags=re.UNICODE).strip(' ._')[:80]
@@ -92,6 +94,7 @@ def start_session(config, participant):
     session_dir = base / f'session_{safe_id}_{stamp}'
     session_dir.mkdir(exist_ok=False)
     payload = {'settings': config, 'participant': info, 'safe_id': safe_id,
+               'biosemi_recording_confirmed': recording_confirmed is True,
                'engine': engine, 'created': datetime.now().astimezone().isoformat()}
     request_path = session_dir / 'session.json'
     request_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding='utf-8')
@@ -146,6 +149,8 @@ def run_worker(request_path):
     try:
         payload = json.loads(request_path.read_text(encoding='utf-8'))
         config = validate_settings(payload['settings'])
+        payload['participant'] = validate_participant(payload['participant'])
+        require_recording_confirmation(config, payload.get('biosemi_recording_confirmed', False))
         from adapter import SerialConnection, build_source, select_audio_backend
         # Build before importing the engine; malformed settings cannot partially
         # initialize acquisition hardware.
@@ -183,6 +188,7 @@ def run_worker(request_path):
         namespace['psychopyVersion'] = psychopy.__version__
         info = dict(namespace['expInfo'])
         info.update(payload['participant'])
+        info['biosemi_recording_confirmed'] = payload.get('biosemi_recording_confirmed', False)
         info['psychopyVersion|hid'] = psychopy.__version__
         # setupData uses the ID in its filename. Substitute only during filename
         # construction, then restore the exact participant text in saved metadata.
