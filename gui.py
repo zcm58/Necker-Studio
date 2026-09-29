@@ -17,7 +17,7 @@ if __package__:
     from . import runtime
     from .participant import HANDEDNESS_KEY, HANDEDNESS_VALUES, SEX_VALUES, ParticipantError, validate_participant, recording_confirmation_required
     from .settings import (
-        APP_DIR, APP_NAME, CONDITION_CHOICES, CONDITION_COLUMNS, CONDITION_HELP,
+        APP_DIR, APP_NAME, CONDITION_CHOICES, CONDITION_COLUMNS,
         FIELD_SPECS, SETTINGS_PATH, default_settings, load_settings,
         save_settings, session_counts, validate_settings, serial_triggers_enabled,
     )
@@ -25,7 +25,7 @@ else:
     import runtime
     from participant import HANDEDNESS_KEY, HANDEDNESS_VALUES, SEX_VALUES, ParticipantError, validate_participant, recording_confirmation_required
     from settings import (
-        APP_DIR, APP_NAME, CONDITION_CHOICES, CONDITION_COLUMNS, CONDITION_HELP,
+        APP_DIR, APP_NAME, CONDITION_CHOICES, CONDITION_COLUMNS,
         FIELD_SPECS, SETTINGS_PATH, default_settings, load_settings,
         save_settings, session_counts, validate_settings, serial_triggers_enabled,
     )
@@ -187,7 +187,7 @@ class ParticipantDialog(tk.Toplevel):
         self.title("Participant Information")
         self.configure(background=PAGE)
         self.transient(parent)
-        _fit_window(self, 700, 690)
+        _fit_window(self, 700, 600)
         footer = FlowButtons(self, padding=(18, 8, 18, 12))
         footer.pack(side="bottom", fill="x")
         self.continue_button = footer.add("Continue", self.accept, style="Primary.TButton")
@@ -199,8 +199,8 @@ class ParticipantDialog(tk.Toplevel):
         self.variables = {}
         self.controls = {}
         fields = (
-            ("participant_ID", "Participant number — digits only (for example, 0012)", None),
-            ("age", "Age — whole number from 1 to 120", None),
+            ("participant_ID", "Participant number", None),
+            ("age", "Age", None),
             ("sex", "Sex", SEX_VALUES),
             (HANDEDNESS_KEY, "Handedness", HANDEDNESS_VALUES),
             ("colorblind", "Colorblind", ("No", "Yes")),
@@ -221,9 +221,6 @@ class ParticipantDialog(tk.Toplevel):
                     control.configure(validate="key", validatecommand=(check, "%P"))
             control.grid(row=index * 2 + 1, column=0, sticky="ew")
             self.controls[key] = control
-        hint = ttk.Label(content, text="Enter electrodes physically removed before recording, separated by commas (for example, FT7, P9, Oz).", style="Muted.TLabel", wraplength=550)
-        hint.grid(row=12, column=0, sticky="ew", pady=(8, 0))
-        labels.append(hint)
         self.error_text = tk.StringVar(self)
         error = ttk.Label(self, textvariable=self.error_text, foreground="#9a3412", wraplength=550)
         error.pack(side="bottom", fill="x", padx=24, pady=(0, 8), before=scroll)
@@ -259,22 +256,19 @@ class BioSemiRecordingConfirmationDialog(tk.Toplevel):
         self.title("Sophia Mode Recording Check")
         self.configure(background=PAGE)
         self.transient(parent)
-        _fit_window(self, 700, 470)
+        _fit_window(self, 700, 260)
         footer = FlowButtons(self, padding=(18, 8, 18, 12))
         footer.pack(side="bottom", fill="x")
         self.continue_button = footer.add("Continue", self.accept, style="Primary.TButton", state="disabled")
         footer.add("Cancel", self.destroy)
         scroll = ScrollFrame(self)
         scroll.pack(fill="both", expand=True, padx=20, pady=20)
-        prompt = ttk.Label(scroll.content, text="NERD Lab Administrator: Sophia Mode is enabled. Confirm that the BioSemi PC is recording data, then type 'Confirm' to continue.", wraplength=600)
+        prompt = ttk.Label(scroll.content, text="Confirm BioSemi is recording. Type Confirm to continue.", wraplength=600)
         prompt.pack(fill="x", pady=(0, 18))
-        ttk.Label(scroll.content, text="Type Confirm to continue").pack(anchor="w", pady=(0, 6))
         self.confirmation = tk.StringVar(self)
         self.entry = ttk.Entry(scroll.content, textvariable=self.confirmation, width=1)
         self.entry.pack(fill="x")
-        note = ttk.Label(scroll.content, text="This records your confirmation; it does not detect the BioSemi recording state automatically.", style="Muted.TLabel", wraplength=600)
-        note.pack(fill="x", pady=(14, 0))
-        scroll.content.bind("<Configure>", lambda event: [label.configure(wraplength=max(80, event.width - 20)) for label in (prompt, note)], add="+")
+        scroll.content.bind("<Configure>", lambda event: prompt.configure(wraplength=max(80, event.width - 20)), add="+")
         self.confirmation.trace_add("write", lambda *_args: self.continue_button.configure(state="normal" if self.matches() else "disabled"))
         self.bind("<Return>", lambda _event: self.accept())
         self.bind("<Escape>", lambda _event: self.destroy())
@@ -302,9 +296,6 @@ class ConditionEditor(ttk.Frame):
         self.filename = filename
         self.columns = list(CONDITION_COLUMNS[filename])
         self.rows = copy.deepcopy(rows)
-        intro_label = ttk.Label(self, text=CONDITION_HELP[filename] + " Double-click a row to edit its values.",
-                                style="Muted.TLabel", wraplength=680)
-        intro_label.pack(anchor="w", pady=(0, 9))
         table_frame = ttk.Frame(self)
         table_frame.pack(fill="both", expand=True)
         table_frame.rowconfigure(0, weight=1)
@@ -330,17 +321,6 @@ class ConditionEditor(ttk.Frame):
             actions.add("Remove", self.remove_row)
         actions.add("↑", lambda: self.move_row(-1), width=3)
         actions.add("↓", lambda: self.move_row(1), width=3)
-        help_text = "Image and sound paths are relative to the assets folder, or may be absolute paths."
-        if filename == "SoundEx.xlsx":
-            help_text += " Four demonstration rows are required; the last row is the Go example."
-        elif "ISI" in self.columns:
-            help_text += " ISI is retained for compatibility and is unused by this protocol."
-        help_label = ttk.Label(self, text=help_text, style="Muted.TLabel", wraplength=650)
-        help_label.pack(anchor="w", pady=(10, 0))
-        self.bind("<Configure>", lambda event: (
-            intro_label.configure(wraplength=max(240, event.width - 30)),
-            help_label.configure(wraplength=max(240, event.width - 30)),
-        ))
         self.refresh()
 
     def refresh(self, select: int | None = None) -> None:
@@ -385,11 +365,6 @@ class ConditionEditor(ttk.Frame):
             if column in {"image", "Sound", "choice"}:
                 ttk.Button(scroll.content, text="Browse…", command=lambda v=variable: self._browse_asset(v, dialog)).grid(
                     row=row_index * 2 + 1, column=1, padx=(7, 0))
-        hint = ttk.Label(scroll.content, text="delay: seconds. choice: choice-screen image. correct: Left or Right.\n"
-                  "GoNoGo: space or None. ISI is unused; blank preserves the original value.",
-                  style="Muted.TLabel", wraplength=500)
-        hint.grid(row=len(self.columns) * 2, column=0, columnspan=2, sticky="ew", pady=12)
-        scroll.content.bind("<Configure>", lambda event: hint.configure(wraplength=max(80, event.width - 20)), add="+")
 
         def apply() -> None:
             value = {column: variable.get().strip() for column, variable in variables.items()}
@@ -472,7 +447,6 @@ class SettingsDialog(tk.Toplevel):
         header = ttk.Frame(self, padding=(20, 16, 20, 12))
         header.pack(fill="x")
         ttk.Label(header, text="Experiment settings", font=("Segoe UI", 19, "bold")).pack(anchor="w")
-        ttk.Label(header, text="Saved settings apply to the next session.", style="Muted.TLabel").pack(anchor="w", pady=(4, 0))
         self.notebook = ttk.Notebook(self, style="Sections.TNotebook")
         self.notebook.pack(fill="both", expand=True, padx=18)
         groups: dict[str, ScrollFrame] = {}
@@ -532,10 +506,6 @@ class SettingsDialog(tk.Toplevel):
             if kind in {"path", "directory", "file"} or key in {"psychopy_python", "output_dir"}:
                 ttk.Button(frame, text="Browse…", command=lambda k=key, v=variable, s=spec: self._browse(k, v, s)).grid(
                     row=1, column=1, padx=(8, 0))
-        if spec.get("help"):
-            label = ttk.Label(frame, text=spec["help"], style="Muted.TLabel", wraplength=720)
-            label.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(5, 0))
-            labels.append(label)
         frame.bind("<Configure>", lambda event: [label.configure(wraplength=max(80, event.width - 60)) for label in labels])
 
     def _browse(self, key: str, variable: tk.Variable, spec: dict) -> None:
@@ -580,7 +550,7 @@ class SettingsDialog(tk.Toplevel):
             return
         self.app.config = config
         self.app.refresh_summary()
-        self.app.status.set("Settings saved. Ready for the next session.")
+        self.app.status.set("Settings saved.")
         self.destroy()
 
 
@@ -604,10 +574,9 @@ class NeckerApp(tk.Tk):
         except (ValueError, OSError) as exc:
             self.config = default_settings()
             self._startup_error = str(exc)
-        self.status = tk.StringVar(self, "Ready to start a session.")
+        self.status = tk.StringVar(self)
         self.output_text = tk.StringVar(self)
         self.setup_text = tk.StringVar(self)
-        self.run_help_text = tk.StringVar(self)
         self._create_menu()
         self._create_page()
         self.refresh_summary()
@@ -627,16 +596,12 @@ class NeckerApp(tk.Tk):
         self.configure(menu=menu)
 
     @staticmethod
-    def _card(parent: tk.Misc, title: str, subtitle: str | None = None) -> ttk.Frame:
+    def _card(parent: tk.Misc, title: str) -> ttk.Frame:
         outline = tk.Frame(parent, background=BORDER, padx=1, pady=1)
         outline.pack(fill="x", pady=(0, 14))
         content = ttk.Frame(outline, style="Card.TFrame", padding=18)
         content.pack(fill="both", expand=True)
         ttk.Label(content, text=title, style="Heading.TLabel").pack(anchor="w")
-        if subtitle:
-            label = ttk.Label(content, text=subtitle, style="CardMuted.TLabel", wraplength=780)
-            label.pack(anchor="w", pady=(5, 0))
-            content.bind("<Configure>", lambda event: label.configure(wraplength=max(240, event.width - 44)), add="+")
         return content
 
     def _create_page(self) -> None:
@@ -648,13 +613,12 @@ class NeckerApp(tk.Tk):
         title = ttk.Label(brand, text=APP_NAME, style="Title.TLabel", wraplength=700)
         title.pack(fill="x")
         brand.bind("<Configure>", lambda event: title.configure(wraplength=max(80, event.width - 8)))
-        ttk.Label(brand, text="Perception & conditioning", style="Muted.TLabel").pack(anchor="w", pady=(3, 0))
         self.settings_button = ttk.Button(header, text="Settings…", command=self.open_settings)
         self.settings_button.grid(row=0, column=1, sticky="ne", padx=(16, 0))
         scroll = ScrollFrame(self)
         scroll.pack(fill="both", expand=True, padx=(20, 14))
         self._main_scroll = scroll
-        summary = self._card(scroll.content, "Session sequence", "The original four stages, presented with PsychoPy.")
+        summary = self._card(scroll.content, "Session sequence")
         metrics = ttk.Frame(summary, style="Card.TFrame")
         metrics.pack(fill="x", pady=(12, 5))
         self.count_labels = {}
@@ -674,12 +638,8 @@ class NeckerApp(tk.Tk):
         setup.pack(anchor="w")
         summary.bind("<Configure>", lambda event: setup.configure(wraplength=max(240, event.width - 44)), add="+")
         run = self._card(scroll.content, "Run session")
-        run_help = ttk.Label(run, textvariable=self.run_help_text,
-                            style="CardMuted.TLabel", wraplength=590)
-        run_help.pack(anchor="w", pady=(5, 14))
-        run.bind("<Configure>", lambda event: run_help.configure(wraplength=max(240, event.width - 44)))
         actions = ttk.Frame(run, style="Card.TFrame")
-        actions.pack(fill="x")
+        actions.pack(fill="x", pady=(12, 0))
         self.start_button = ttk.Button(actions, text="Launch Experiment", style="Primary.TButton", command=self.start)
         self.start_button.pack(side="left")
         self.stop_button = ttk.Button(actions, text="Stop session", command=self.stop, state="disabled")
@@ -721,14 +681,6 @@ class NeckerApp(tk.Tk):
         self.badge.configure(text="TEST MODE" if test_mode else "READY",
                              foreground="#9a3412" if test_mode else ACCENT,
                              background="#ffedd5" if test_mode else "#dceeee")
-        self.run_help_text.set(
-            "Test mode is enabled. Launch a test without participant entry, COM3, or the BioSemi recording check. "
-            "Full-screen and timing settings still apply. Results are marked TEST and saved under test_runs. "
-            "Press Escape in the experiment to stop."
-            if test_mode else
-            "Launch Experiment opens the participant form, followed by the Sophia Mode recording check when enabled. "
-            "Use File > Settings to adjust the experiment. Press Escape in the experiment to stop."
-        )
 
     def open_settings(self) -> None:
         if self.busy:
@@ -756,9 +708,7 @@ class NeckerApp(tk.Tk):
     def _confirm_test_mode(self):
         return messagebox.askyesno(
             "Launch test experiment?",
-            "Test mode is enabled. This run will not use COM3 or require BioSemi recording or participant details.\n\n"
-            "Full-screen and timing settings still apply. Output will be marked TEST and saved in the test_runs folder.\n\n"
-            "Launch the test experiment?", parent=self,
+            "Launch a test experiment without COM3 or BioSemi recording?", parent=self,
         )
 
     def start(self) -> None:
@@ -770,13 +720,13 @@ class NeckerApp(tk.Tk):
             config = validate_settings(copy.deepcopy(self.config))
             if config["test_mode"]:
                 if not self._confirm_test_mode():
-                    self.status.set("Test launch cancelled. No session was started.")
+                    self.status.set("Test launch cancelled.")
                     return
                 participant = None
             else:
                 participant = self._participant_details()
                 if participant is None:
-                    self.status.set("Launch cancelled. No session was started.")
+                    self.status.set("Launch cancelled.")
                     return
             needs_recording = recording_confirmation_required(config)
             recording_confirmed = needs_recording and self._confirm_recording()
@@ -793,7 +743,7 @@ class NeckerApp(tk.Tk):
         self._stop_requested = False
         self._set_busy(True)
         self.badge.configure(text="STARTING", foreground="#0c4a6e", background="#e0f2fe")
-        self.status.set("Checking the PsychoPy engine and preparing the session…")
+        self.status.set("Starting session…")
 
         def launch() -> None:
             try:
@@ -814,7 +764,7 @@ class NeckerApp(tk.Tk):
         if event == "error":
             self._set_busy(False)
             self.badge.configure(text="ATTENTION", foreground="#9a3412", background="#ffedd5")
-            self.status.set("The session did not start. Review the error and settings.")
+            self.status.set("Session could not start.")
             messagebox.showerror("Unable to start session", value, parent=self)
             if self._closing:
                 self.destroy()
@@ -823,8 +773,7 @@ class NeckerApp(tk.Tk):
         self.log_button.configure(state="normal")
         self.stop_button.configure(state="normal")
         self.badge.configure(text="TEST RUN" if self.config["test_mode"] else "RUNNING", foreground=ACCENT, background="#dceeee")
-        self.status.set("Test session running. COM3 and BioSemi recording checks are bypassed."
-                        if self.config["test_mode"] else "Session running. PsychoPy controls the presentation window.")
+        self.status.set("Test session running." if self.config["test_mode"] else "Session running.")
         self.output_text.set(str(self.handle.session_dir))
         if self._closing:
             self.stop()
@@ -847,13 +796,13 @@ class NeckerApp(tk.Tk):
         status = result.get("status", "failed")
         if status == "completed":
             self.badge.configure(text="COMPLETE", foreground="#166534", background="#dcfce7")
-            self.status.set("Session complete. Data and settings are in the session output folder.")
+            self.status.set("Session complete.")
         elif status == "aborted":
             self.badge.configure(text="STOPPED", foreground="#9a3412", background="#ffedd5")
-            self.status.set("Session stopped. Available data are in the session output folder.")
+            self.status.set("Session stopped.")
         else:
             self.badge.configure(text="FAILED", foreground="#991b1b", background="#fef2f2")
-            self.status.set("The session ended with an error. Open the run log for details.")
+            self.status.set("Session failed. See run log.")
             error = result.get("error") or f"The PsychoPy process exited without a completion report (exit code {code})."
             messagebox.showerror("Session error", f"{error}\n\nRun log:\n{self.handle.log_path}", parent=self)
         if self._closing:
@@ -870,7 +819,7 @@ class NeckerApp(tk.Tk):
         self._stop_requested = True
         self.stop_button.configure(state="disabled")
         self.badge.configure(text="STOPPING", foreground="#9a3412", background="#ffedd5")
-        self.status.set("Stop requested. Waiting for PsychoPy to save data and close…")
+        self.status.set("Stopping and saving data…")
 
     def open_output(self) -> None:
         try:

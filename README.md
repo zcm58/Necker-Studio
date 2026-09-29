@@ -48,7 +48,7 @@ The results folder persists across launches in the project's local `settings.jso
 | Timing | Exposure, routine/response durations, fixation, blank-frame bounds, tone duration |
 | Conditions | Edit, add, duplicate, remove, reorder, and browse stimuli for condition rows |
 
-The demonstration table retains exactly four rows because the reference uses the first three for no-go demonstrations and the fourth for go demonstrations. Some original columns are metadata only: `LorR.image` and `ISI` do not drive the displayed cube or timing; that cube remains the bundled `Necker6.png`. `SoundA.correct` and `GoNoGo` are retained in the data but the reference does not calculate accuracy from them. The editor labels these limitations.
+The demonstration table retains exactly four rows because the reference uses the first three for no-go demonstrations and the fourth for go demonstrations. Some original columns are metadata only: `LorR.image` and `ISI` do not drive the displayed cube or timing; that cube remains the bundled `Necker6.png`. `SoundA.correct` and `GoNoGo` are retained in the data but the reference does not calculate accuracy from them.
 
 Stimuli are specified in visual degrees. By default the app uses the existing `testMonitor` calibration. If it is missing or incomplete, choose a calibrated monitor profile or enter the measured monitor width, viewing distance, and display pixel dimensions in Settings. Calibration overrides apply to this app's sessions without changing the saved PsychoPy monitor profile.
 
