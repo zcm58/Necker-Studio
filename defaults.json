@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "psychopy_python": "",
+  "output_dir": "data",
+  "full_screen": true,
+  "window_width": 1920,
+  "window_height": 1080,
+  "screen": 1,
+  "monitor_name": "testMonitor",
+  "monitor_width_cm": "",
+  "monitor_distance_cm": "",
+  "cube_width_deg": 6.0,
+  "cube_height_deg": 5.25,
+  "volume": 1.0,
+  "serial_enabled": true,
+  "serial_port": "COM3",
+  "serial_baud": 115200,
+  "practice_reps": 1,
+  "baseline_blocks": 5,
+  "baseline_reps": 3,
+  "conditioning_blocks": 5,
+  "conditioning_reps": 4,
+  "post_blocks": 5,
+  "post_reps": 3,
+  "no_go_demo_reps": 1,
+  "go_demo_reps": 2,
+  "stimulus_seconds": 0.15,
+  "practice_seconds": 0.8,
+  "necker_seconds": 1.5,
+  "response_seconds": 3.0,
+  "conditioning_seconds": 1.5,
+  "gonogo_seconds": 1.4,
+  "fixation_seconds": 1.0,
+  "blank_min_frames": 62,
+  "blank_max_frames": 125,
+  "tone_seconds": 0.05,
+  "conditions": {
+    "LorR.xlsx": [
+      {
+        "Sound": "440.wav",
+        "delay": 0,
+        "image": "Necker.png",
+        "choice": "LoR.png",
+        "ISI": null
+      },
+      {
+        "Sound": "0.wav",
+        "delay": 0,
+        "image": "Necker.png",
+        "choice": "RoL.png",
+        "ISI": null
+      },
+      {
+        "Sound": "440.wav",
+        "delay": 0,
+        "image": "Necker.png",
+        "choice": "RoL.png",
+        "ISI": null
+      },
+      {
+        "Sound": "0.wav",
+        "delay": 0,
+        "image": "Necker.png",
+        "choice": "LoR.png",
+        "ISI": null
+      },
+      {
+        "Sound": "440.wav",
+        "delay": 0.2,
+        "image": "Necker.png",
+        "choice": "LoR.png",
+        "ISI": null
+      },
+      {
+        "Sound": "440.wav",
+        "delay": 0.2,
+        "image": "Necker.png",
+        "choice": "RoL.png",
+        "ISI": null
+      },
+      {
+        "Sound": "440.wav",
+        "delay": 0.85,
+        "image": "Necker.png",
+        "choice": "LoR.png",
+        "ISI": null
+      },
+      {
+        "Sound": "440.wav",
+        "delay": 0.85,
+        "image": "Necker.png",
+        "choice": "RoL.png",
+        "ISI": null
+      }
+    ],
+    "SoundA.xlsx": [
+      {
+        "Sound": "440.wav",
+        "text": "Left",
+        "image": "L.png",
+        "choice": "LoR.png",
+        "correct": "Left",
+        "GoNoGo": "None"
+      },
+      {
+        "Sound": "440.wav",
+        "text": "Right",
+        "image": "R.png",
+        "choice": "RoL.png",
+        "correct": "Left",
+        "GoNoGo": "space"
+      },
+      {
+        "Sound": "440.wav",
+        "text": "Left",
+        "image": "L.png",
+        "choice": "RoL.png",
+        "correct": "Right",
+        "GoNoGo": "None"
+      },
+      {
+        "Sound": "440.wav",
+        "text": "Right",
+        "image": "R.png",
+        "choice": "LoR.png",
+        "correct": "Right",
+        "GoNoGo": "space"
+      },
+      {
+        "Sound": "0.wav",
+        "text": "Left",
+        "image": "L.png",
+        "choice": "LoR.png",
+        "correct": "Left",
+        "GoNoGo": "None"
+      },
+      {
+        "Sound": "0.wav",
+        "text": "Right",
+        "image": "R.png",
+        "choice": "RoL.png",
+        "correct": "Left",
+        "GoNoGo": "None"
+      }
+    ],
+    "SoundEx.xlsx": [
+      {
+        "Sound": "440.wav",
+        "text": "Left",
+        "image": "L.png"
+      },
+      {
+        "Sound": "0.wav",
+        "text": "Right",
+        "image": "R.png"
+      },
+      {
+        "Sound": "0.wav",
+        "text": "Left",
+        "image": "L.png"
+      },
+      {
+        "Sound": "440.wav",
+        "text": "Right",
+        "image": "R.png"
+      }
+    ]
+  }
+}

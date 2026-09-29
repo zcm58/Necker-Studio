@@ -1,0 +1,5 @@
+# Direct dependencies; install requirements.txt for the verified complete environment.
+psychopy==2026.2.4
+pyserial==3.5
+./vendor/pyglet-1.4.11+necker1-py2.py3-none-any.whl
+./vendor/pywinhook-1.6.2-cp312-cp312-win_amd64.whl

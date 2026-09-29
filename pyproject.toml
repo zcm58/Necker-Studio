@@ -1,0 +1,17 @@
+[project]
+name = "necker-studio"
+version = "0.1.0"
+description = "A desktop interface for the Necker perception and conditioning experiment"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "psychopy==2026.2.4", "pyserial==3.5",
+    "pyglet==1.4.11+necker1", "pywinhook==1.6.2",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+pyglet = { path = "vendor/pyglet-1.4.11+necker1-py2.py3-none-any.whl" }
+pywinhook = { path = "vendor/pywinhook-1.6.2-cp312-cp312-win_amd64.whl" }
