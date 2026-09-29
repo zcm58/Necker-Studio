@@ -14,16 +14,18 @@ from datetime import datetime
 from pathlib import Path
 
 if __package__:
+    from .app_paths import STATE_DIR, bundled_python
     from .settings import APP_DIR, condition_rows, validate_settings, serial_triggers_enabled
     from .participant import session_participant, require_recording_confirmation
 else:
+    from app_paths import STATE_DIR, bundled_python
     from settings import APP_DIR, condition_rows, validate_settings, serial_triggers_enabled
     from participant import session_participant, require_recording_confirmation
 
 
 def output_directory(config):
     path = Path(config['output_dir']).expanduser()
-    path = path.resolve() if path.is_absolute() else (APP_DIR / path).resolve()
+    path = path.resolve() if path.is_absolute() else (STATE_DIR / path).resolve()
     return path / 'test_runs' if config['test_mode'] else path
 
 
@@ -33,6 +35,8 @@ def discover_python(config):
     if selected:
         selected_path = Path(selected).expanduser()
         candidates = [selected_path if selected_path.is_absolute() else APP_DIR / selected_path]
+    elif bundled_python(APP_DIR) is not None:
+        candidates = [bundled_python(APP_DIR)]
     else:
         candidates = [APP_DIR / '.venv' / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python'), Path(sys.executable)]
         local = os.environ.get('LOCALAPPDATA')
@@ -48,7 +52,7 @@ def discover_python(config):
         if not path.is_file():
             continue
         try:
-            result = subprocess.run([str(path), '-c', probe], capture_output=True,
+            result = subprocess.run([str(path), '-E', '-s', '-c', probe], capture_output=True,
                                     timeout=15, creationflags=_no_window())
             if result.returncode == 0:
                 return str(path)
@@ -107,7 +111,7 @@ def start_session(config, participant=None, *, recording_confirmed=False):
     try:
         with log_path.open('w', encoding='utf-8') as log:
             process = subprocess.Popen(
-                [engine, '-u', str(Path(__file__).resolve()), '--session', str(request_path)],
+                [engine, '-E', '-s', '-u', str(Path(__file__).resolve()), '--session', str(request_path)],
                 cwd=str(APP_DIR), stdout=log, stderr=subprocess.STDOUT,
                 creationflags=_no_window(),
             )
@@ -157,6 +161,7 @@ def run_worker(request_path):
             payload['biosemi_recording_confirmed'] = False
         require_recording_confirmation(config, payload.get('biosemi_recording_confirmed', False))
         from adapter import SerialConnection, build_source, select_audio_backend
+        from presentation import fit_presentation
         # Build before importing the engine; malformed settings cannot partially
         # initialize acquisition hardware.
         source = build_source(config)
@@ -186,6 +191,7 @@ def run_worker(request_path):
             'check_abort': check_abort,
             'studio_monitor': monitor,
             'studio_audio_backend': backend,
+            'fit_presentation': fit_presentation,
         }
         # No shell or user supplied Python is evaluated: this is the hash-checked
         # bundled Builder export with validated literal settings.

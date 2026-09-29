@@ -15,9 +15,13 @@ import tempfile
 from typing import Any
 
 
-APP_DIR = Path(__file__).resolve().parent
+if __package__:
+    from .app_paths import APP_DIR, STATE_DIR
+else:
+    from app_paths import APP_DIR, STATE_DIR
+
 APP_NAME = "Nicholas's Nice Necker Cube Experiment"
-SETTINGS_PATH = APP_DIR / "settings.json"
+SETTINGS_PATH = STATE_DIR / "settings.json"
 DEFAULTS_PATH = APP_DIR / "defaults.json"
 ASSETS_DIR = APP_DIR / "assets"
 SERIAL_PORT = "COM3"

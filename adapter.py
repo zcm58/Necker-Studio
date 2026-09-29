@@ -106,6 +106,8 @@ def build_source(config):
     source = _replace(source, "_winSize = [1920, 1080]",
                       f"_winSize = {[config['window_width'], config['window_height']]!r}", 1)
     # Absolute origin avoids the previous researcher's hard-coded OneDrive path.
+    source = _replace(source, '    # create some handy timers',
+                      '    fit_presentation(win, locals())\n\n    # create some handy timers', 1)
     source = re.sub(r"originPath='[^'\n]*'", lambda m: f"originPath={str(REFERENCE)!r}", source)
 
     loops = {'trials_9': 'practice_reps', 'trials_6': 'baseline_blocks',

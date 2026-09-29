@@ -2,6 +2,15 @@
 
 A standalone operator interface for `__NEW_NECKER.psyexp`, with a File > Settings dialog and an FPVS Studio inspired light interface. PsychoPy still performs stimulus presentation, audio, response collection, and timing. Builder is not needed to run or configure a session.
 
+## Windows release 1.0
+
+Download the x64 installer from [GitHub Releases](https://github.com/zcm58/Necker-Studio/releases/tag/v1.0).
+It includes Python 3.12.14 and the pinned PsychoPy environment; no separate Python or PsychoPy installation is required.
+The installer runs per user and creates a Start menu shortcut. A desktop shortcut is optional.
+Installed settings and relative output folders live under `%LOCALAPPDATA%\NicholasNiceNeckerCubeExperiment`.
+They persist across launches, reinstallations and uninstalling the application. An explicitly selected absolute output folder is retained.
+The installed app starts with factory settings; configure the actual monitor calibration in File > Settings before collecting data.
+
 ## Run from PyCharm
 
 This machine's project is **C:\Users\zcm58\PyCharmProjects\Necker-Studio**.
@@ -56,6 +65,8 @@ Serial triggers are enabled by default on **COM3 at 115200 baud**, matching the 
 
 ## Default protocol
 
+Operator windows open with horizontal and vertical margins inside the active monitor's work area, including space for the title bar and taskbar. Settings pages remain scrollable.
+
 | Phase | Trials |
 | --- | ---: |
 | Practice | 8 |
@@ -64,7 +75,7 @@ Serial triggers are enabled by default on **COM3 at 115200 baud**, matching the 
 | Final measurement | 120: 5 blocks × 3 repetitions × 8 conditions |
 | Total | 368, plus 3 no-go and 2 go demonstrations |
 
-The original instructions, pictures, WAV files, randomization methods, space/arrow keys, response windows, screen colors, stimulus positions, breaks, and data field names are retained. Every block still ends with the original space-confirmed break, including the last block. Escape stops the experiment; the operator interface also provides **Stop session** and waits for the child process to save and close.
+The original instruction wording, pictures, WAV files, randomization methods, space/arrow keys, response windows, screen colors, breaks, and data field names are retained. Instruction text and illustrations fit within 5% horizontal and vertical margins using the actual display size. The intro and recap pages keep a gap between text and illustration. Choice and demonstration images shrink only if needed to fit. Experimental trial cubes retain the selected size in visual degrees and central position; invalid calibration or a cube larger than the safe area produces an error before trials begin. Layout is calculated before the experiment clock starts. Every block still ends with the original space-confirmed break, including the last block. Escape stops the experiment; the operator interface also provides **Stop session** and waits for the child process to save and close.
 
 Fidelity details intentionally preserved:
 
@@ -97,10 +108,31 @@ The **Open output folder** and **View run log** buttons provide access. A stop o
 
 Run the automated tests with `python -m unittest discover -s tests -v` from this folder. The tests do not require PsychoPy, a display, or serial hardware. They cover the protocol, condition fixtures, timing changes, response semantics, saved settings, invalid settings, output isolation, audio compatibility, and the exclusive-port regression.
 
-Twelve additional Tk interface tests are opt-in: set `NECKER_GUI_SMOKE=1` in the test run's environment. They briefly open windows but never launch an experiment or contact hardware. All **59 tests**, including these interface tests, passed on the development machine. Coverage includes saved-folder migration, locked COM3, required demographics, fresh typed recording confirmation, cancellation, settings at minimum size and with larger text, test-mode hardware suppression, separate test output, and restoration of normal launch checks. The generated stimulus source is identical when only test mode is toggled.
+Twelve additional Tk interface tests are opt-in: set `NECKER_GUI_SMOKE=1` in the test run's environment. They briefly open windows but never launch an experiment or contact hardware. All **65 tests**, including these interface tests, passed on the development machine. Coverage includes saved-folder migration, locked COM3, required demographics, fresh typed recording confirmation, cancellation, settings at minimum size and with larger text, test-mode hardware suppression, separate test output, installed paths, screen margins, and restoration of normal launch checks. The generated stimulus source is identical when only test mode is toggled.
 
 A full-screen test-mode session completed all 30 accelerated trials and four demonstrations with serial access explicitly blocked. Its CSV rows correctly identify the TEST participant, test mode, disabled serial hardware, and absent recording confirmation.
 
-Validation on **Python 3.12.14 with PsychoPy 2026.2.4** included a complete accelerated 30-trial session plus four demonstrations with simulated responses. All phases completed, outputs were saved, and the process exited successfully. Earlier validation also included the Tk settings/run-state interface, a real PsychoPy startup with cooperative abort and saved data. The complete session produced CSV, psydat, and log files and reached the thanks screen. Test output is separate from participant output. The full-screen layout was also checked at 1920×1080: captured instruction and recap frames contained all text and artwork without clipping. The earlier 800×600 smoke window was too small for the original layout; full screen remains the default. Physical COM3 trigger delivery and laboratory audiovisual timing have not been measured.
+Validation on **Python 3.12.14 with PsychoPy 2026.2.4** included a complete accelerated 30-trial session plus four demonstrations with simulated responses. All phases completed, outputs were saved, and the process exited successfully. Earlier validation also included the Tk settings/run-state interface and a real PsychoPy startup with cooperative abort and saved data. The complete session produced CSV, psydat, and log files and reached the thanks screen. Test output is separate from participant output. The revised layout was checked at 1920×1080 full screen, 1280×720 and 800×600 using a 53 cm monitor width and 80 cm viewing distance: all instruction bounds fit within the margins, paired text/artwork do not overlap, and trial cube geometry is unchanged. Physical COM3 trigger delivery and laboratory audiovisual timing have not been measured.
 
 `reference/experiment_source.py` is the unchanged September 29, 2026 generated script (PsychoPy 2026.2.3). `adapter.py` makes explicit, checked substitutions for settings and application integration while retaining the original frame loops. Replacing the reference requires reviewing the adapter and tests; its checksum deliberately rejects unreviewed changes.
+
+## Build the Windows installer
+
+With a clean committed checkout, the verified project environment and Inno Setup 6 installed, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_installer.ps1
+```
+
+This builds a native windowed launcher, copies the local CPython runtime and pinned site-packages into a relocatable bundle, verifies imports and dependencies, then compiles `packaging/necker.iss`. It does not install or update global packages. Output is the versioned x64 installer, SHA256SUMS.txt and release.json in `dist`. The bundle contains application source and dependency license files; it excludes saved settings, participant data and personal interpreter paths.
+
+Use `-BundleOnly` to inspect and test a bundle before compiling, then `-ExistingBundle <path>` to compile that verified bundle. `-Iscc <path>` selects a different installed Inno Setup compiler.
+
+Opt-in desktop checks:
+
+```powershell
+.venv\Scripts\python.exe scripts/verify_presentation.py
+.venv\Scripts\python.exe scripts/verify_session.py --output .verification/new-session-check
+```
+
+The first checks real rendered bounds and captures every instruction page at three sizes using a 53 cm screen width and 80 cm viewing distance. The second runs the full phase sequence with shortened timings, simulated responses and blocked serial hardware. These are functional checks; they do not measure acquisition hardware timing.

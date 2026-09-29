@@ -15,6 +15,7 @@ from tkinter import filedialog, messagebox, ttk
 
 if __package__:
     from . import runtime
+    from .window_layout import fit_window as _fit_window
     from .participant import HANDEDNESS_KEY, HANDEDNESS_VALUES, SEX_VALUES, ParticipantError, validate_participant, recording_confirmation_required
     from .settings import (
         APP_DIR, APP_NAME, CONDITION_CHOICES, CONDITION_COLUMNS,
@@ -23,6 +24,7 @@ if __package__:
     )
 else:
     import runtime
+    from window_layout import fit_window as _fit_window
     from participant import HANDEDNESS_KEY, HANDEDNESS_VALUES, SEX_VALUES, ParticipantError, validate_participant, recording_confirmation_required
     from settings import (
         APP_DIR, APP_NAME, CONDITION_CHOICES, CONDITION_COLUMNS,
@@ -73,14 +75,6 @@ def _apply_theme(root: tk.Tk) -> None:
     style.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"), padding=6)
     style.map("Treeview", background=[("selected", "#d8eeee")],
               foreground=[("selected", INK)])
-
-
-def _fit_window(window: tk.Toplevel | tk.Tk, width: int, height: int) -> None:
-    """Keep the initial window inside the available screen, including small laptops."""
-    width = min(width, max(520, window.winfo_screenwidth() - 80))
-    height = min(height, max(380, window.winfo_screenheight() - 100))
-    window.geometry(f"{width}x{height}")
-    window.minsize(min(680, width), min(470, height))
 
 
 def _open_path(path: Path) -> None:
