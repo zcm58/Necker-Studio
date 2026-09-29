@@ -43,7 +43,7 @@ class RuntimeTests(unittest.TestCase):
                  patch.object(runtime.subprocess, 'Popen', return_value=Mock()):
                 handle = runtime.start_session(config)
             payload = json.loads((handle.session_dir / 'session.json').read_text())
-            self.assertEqual(handle.session_dir.parent, Path(temporary) / 'test_runs')
+            self.assertEqual(handle.session_dir.parent, Path(temporary).resolve() / 'test_runs')
             self.assertTrue(handle.session_dir.name.startswith('session_TEST_'))
             self.assertEqual(payload['participant']['participant_ID'], 'TEST')
             self.assertIsNone(payload['participant']['age'])
@@ -52,7 +52,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue(payload['settings']['serial_enabled'])
             self.assertTrue(payload['settings']['sophia_mode'])
             config['test_mode'] = False
-            self.assertEqual(runtime.output_directory(config), Path(temporary))
+            self.assertEqual(runtime.output_directory(config), Path(temporary).resolve())
             with self.assertRaisesRegex(ValueError, 'Sophia Mode'):
                 runtime.start_session(config, PARTICIPANT)
 

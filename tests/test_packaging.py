@@ -20,7 +20,7 @@ class InstalledPathsTests(unittest.TestCase):
 
     def test_installed_state_survives_a_different_install_directory(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             for version in ('v1', 'v2'):
                 app = root / version / 'app'
                 app.mkdir(parents=True)
@@ -45,7 +45,7 @@ class InstalledPathsTests(unittest.TestCase):
 
     def test_relative_output_uses_writable_state_and_absolute_output_is_preserved(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
+            root = Path(temporary).resolve()
             config = default_settings()
             with patch.object(runtime, 'STATE_DIR', root / 'state'):
                 self.assertEqual(runtime.output_directory(config), root / 'state' / 'data')
