@@ -16,6 +16,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--app', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--windowed', action='store_true')
     args = parser.parse_args()
     app, folder = args.app.resolve(), args.output.resolve()
     folder.mkdir(parents=True, exist_ok=False)
@@ -29,6 +30,8 @@ def main():
                   necker_seconds=.95, response_seconds=.12, conditioning_seconds=.12,
                   gonogo_seconds=.12, fixation_seconds=.12, blank_min_frames=1,
                   blank_max_frames=2, tone_seconds=.03)
+    if args.windowed:
+        config.update(full_screen=False, window_width=800, window_height=600)
     (folder / 'session.json').write_text(json.dumps({'settings': config, 'participant': None,
                                                   'safe_id': 'TEST', 'biosemi_recording_confirmed': False}))
     harness = '''import sys
@@ -76,7 +79,8 @@ raise SystemExit(run_worker(Path(__file__).parent / 'session.json'))
     assert {key: sum(bool(r.get(key)) for r in rows) for key in expected} == expected
     assert all(r['participant_ID'] == 'TEST' and r['test_mode'] == 'True' and
                r['serial_enabled'] == 'False' and r['biosemi_recording_confirmed'] == 'False' for r in rows)
-    print('Full-screen session passed: 30 trials, 4 demonstrations, saved results, no serial access.')
+    print('Session passed: 30 trials, 4 demonstrations, saved results, no serial access; '
+          f'full_screen={config["full_screen"]}.')
 
 
 if __name__ == '__main__':
