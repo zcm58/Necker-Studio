@@ -3,6 +3,7 @@
   "psychopy_python": "",
   "output_dir": "data",
   "sophia_mode": true,
+  "test_mode": false,
   "full_screen": true,
   "window_width": 1920,
   "window_height": 1080,

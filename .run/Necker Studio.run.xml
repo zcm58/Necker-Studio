@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Necker Studio" type="PythonConfigurationType" factoryName="Python">
+  <configuration default="false" name="Nicholas's Nice Necker Cube Experiment" type="PythonConfigurationType" factoryName="Python">
     <module name="necker-studio" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />

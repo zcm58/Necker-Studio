@@ -14,16 +14,17 @@ from datetime import datetime
 from pathlib import Path
 
 if __package__:
-    from .settings import APP_DIR, condition_rows, validate_settings
-    from .participant import validate_participant, require_recording_confirmation
+    from .settings import APP_DIR, condition_rows, validate_settings, serial_triggers_enabled
+    from .participant import session_participant, require_recording_confirmation
 else:
-    from settings import APP_DIR, condition_rows, validate_settings
-    from participant import validate_participant, require_recording_confirmation
+    from settings import APP_DIR, condition_rows, validate_settings, serial_triggers_enabled
+    from participant import session_participant, require_recording_confirmation
 
 
 def output_directory(config):
     path = Path(config['output_dir']).expanduser()
-    return path.resolve() if path.is_absolute() else (APP_DIR / path).resolve()
+    path = path.resolve() if path.is_absolute() else (APP_DIR / path).resolve()
+    return path / 'test_runs' if config['test_mode'] else path
 
 
 def discover_python(config):
@@ -79,9 +80,11 @@ class SessionHandle:
         self.stop_path.touch()
 
 
-def start_session(config, participant, *, recording_confirmed=False):
+def start_session(config, participant=None, *, recording_confirmed=False):
     config = validate_settings(config)
-    info = validate_participant(participant)
+    info = session_participant(config, participant)
+    if config['test_mode']:
+        recording_confirmed = False
     require_recording_confirmation(config, recording_confirmed)
     engine = discover_python(config)
     # Preserve the actual ID in metadata while preventing path traversal and
@@ -149,7 +152,9 @@ def run_worker(request_path):
     try:
         payload = json.loads(request_path.read_text(encoding='utf-8'))
         config = validate_settings(payload['settings'])
-        payload['participant'] = validate_participant(payload['participant'])
+        payload['participant'] = session_participant(config, payload.get('participant'))
+        if config['test_mode']:
+            payload['biosemi_recording_confirmed'] = False
         require_recording_confirmation(config, payload.get('biosemi_recording_confirmed', False))
         from adapter import SerialConnection, build_source, select_audio_backend
         # Build before importing the engine; malformed settings cannot partially
@@ -189,6 +194,7 @@ def run_worker(request_path):
         info = dict(namespace['expInfo'])
         info.update(payload['participant'])
         info['biosemi_recording_confirmed'] = payload.get('biosemi_recording_confirmed', False)
+        info['test_mode'] = config['test_mode']
         info['psychopyVersion|hid'] = psychopy.__version__
         # setupData uses the ID in its filename. Substitute only during filename
         # construction, then restore the exact participant text in saved metadata.
@@ -199,7 +205,7 @@ def run_worker(request_path):
         info['participant_ID'] = original_id
         experiment.extraInfo['participant_ID'] = original_id
         info['studio_settings'] = str(request_path)
-        info['serial_enabled'] = config['serial_enabled']
+        info['serial_enabled'] = serial_triggers_enabled(config)
         info['monitor_width_cm'] = monitor.getWidth()
         info['monitor_distance_cm'] = monitor.getDistance()
         info['monitor_size_pixels'] = monitor.getSizePix()

@@ -1,4 +1,4 @@
-"""PyCharm entry point for the self-contained Necker Studio folder."""
+"""PyCharm entry point for Nicholas's Nice Necker Cube Experiment."""
 
 if __package__:
     from .gui import main

@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch, Mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from adapter import select_audio_backend
+from adapter import select_audio_backend, SerialConnection, build_source
 import runtime
 from settings import default_settings
 from participant import HANDEDNESS_KEY
@@ -19,6 +19,43 @@ PARTICIPANT = {'participant_ID': '0012', 'age': 25, 'sex': 'Female',
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_test_mode_never_opens_com3_and_preserves_experiment_source(self):
+        config = default_settings()
+        original_source = build_source(config)
+        config['test_mode'] = True
+        self.assertEqual(build_source(config), original_source)
+        factory = Mock(side_effect=AssertionError('COM3 must not be opened in test mode'))
+        connection = SerialConnection(config, factory=factory)
+        port = connection.open()
+        self.assertIs(port, connection.open())
+        self.assertEqual(port.write(b'\x01'), 1)
+        connection.close()
+        connection.close()
+        factory.assert_not_called()
+        self.assertTrue(config['serial_enabled'])
+        self.assertTrue(config['sophia_mode'])
+
+    def test_test_mode_creates_separate_output_without_participant_or_confirmation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config = default_settings()
+            config.update(test_mode=True, output_dir=temporary)
+            with patch.object(runtime, 'discover_python', return_value=sys.executable), \
+                 patch.object(runtime.subprocess, 'Popen', return_value=Mock()):
+                handle = runtime.start_session(config)
+            payload = json.loads((handle.session_dir / 'session.json').read_text())
+            self.assertEqual(handle.session_dir.parent, Path(temporary) / 'test_runs')
+            self.assertTrue(handle.session_dir.name.startswith('session_TEST_'))
+            self.assertEqual(payload['participant']['participant_ID'], 'TEST')
+            self.assertIsNone(payload['participant']['age'])
+            self.assertFalse(payload['biosemi_recording_confirmed'])
+            self.assertTrue(payload['settings']['test_mode'])
+            self.assertTrue(payload['settings']['serial_enabled'])
+            self.assertTrue(payload['settings']['sophia_mode'])
+            config['test_mode'] = False
+            self.assertEqual(runtime.output_directory(config), Path(temporary))
+            with self.assertRaisesRegex(ValueError, 'Sophia Mode'):
+                runtime.start_session(config, PARTICIPANT)
+
     def test_audio_legacy_lists_and_new_string_preferences(self):
         installed = {'ptb': object(), 'pygame': object()}
         self.assertEqual(select_audio_backend(['PTB', 'pygame'], installed), 'ptb')

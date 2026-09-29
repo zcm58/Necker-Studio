@@ -262,6 +262,51 @@ class GuiSmokeTests(unittest.TestCase):
             self.recording_dialog.assert_not_called()
             self.assertIs(launch.call_args.kwargs["recording_confirmed"], False)
 
+    def test_test_mode_skips_hardware_prompts_and_restores_normal_launch(self):
+        self.app.open_settings()
+        dialog = self.app._settings_dialog
+        dialog.variables["test_mode"].set(True)
+        dialog.save()
+        self.assertTrue(self.app.config["test_mode"])
+        self.assertTrue(self.app.config["serial_enabled"])
+        self.assertTrue(self.app.config["sophia_mode"])
+        self.assertEqual(self.app.start_button.cget("text"), "Launch Test Experiment")
+        self.assertEqual(self.app.badge.cget("text"), "TEST MODE")
+        self.assertIn("test_runs", self.app.output_text.get())
+        with patch.object(gui.runtime, "start_session", side_effect=RuntimeError("test failure")) as launch, \
+             patch.object(self.app, "_confirm_test_mode", return_value=True) as acknowledge:
+            self.app.start()
+            deadline = time.monotonic() + 3
+            while self.app.busy and time.monotonic() < deadline:
+                self.app.update()
+                time.sleep(.01)
+            acknowledge.assert_called_once()
+            self.participant_dialog.assert_not_called()
+            self.recording_dialog.assert_not_called()
+            self.assertIsNone(launch.call_args.args[1])
+            self.assertFalse(launch.call_args.kwargs["recording_confirmed"])
+            self.app.config["test_mode"] = False
+            self.app.refresh_summary()
+            self.assertEqual(self.app.start_button.cget("text"), "Launch Experiment")
+            self.app.start()
+            deadline = time.monotonic() + 3
+            while self.app.busy and time.monotonic() < deadline:
+                self.app.update()
+                time.sleep(.01)
+            self.participant_dialog.assert_called_once()
+            self.recording_dialog.assert_called_once()
+            self.assertTrue(launch.call_args.kwargs["recording_confirmed"])
+
+    def test_cancel_test_acknowledgment_never_launches(self):
+        self.app.config["test_mode"] = True
+        with patch.object(self.app, "_confirm_test_mode", return_value=False), \
+             patch.object(gui.runtime, "start_session") as launch:
+            self.app.start()
+            launch.assert_not_called()
+            self.participant_dialog.assert_not_called()
+            self.recording_dialog.assert_not_called()
+            self.assertFalse(self.app.busy)
+
 
 if __name__ == "__main__":
     unittest.main()

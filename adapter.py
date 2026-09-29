@@ -10,9 +10,9 @@ import hashlib
 import re
 
 if __package__:
-    from .settings import APP_DIR, default_settings, validate_settings
+    from .settings import APP_DIR, default_settings, validate_settings, serial_triggers_enabled
 else:
-    from settings import APP_DIR, default_settings, validate_settings
+    from settings import APP_DIR, default_settings, validate_settings, serial_triggers_enabled
 
 REFERENCE = APP_DIR / "reference" / "experiment_source.py"
 REFERENCE_SHA256 = "0a0ce03f9fc72d15bf38b5319e6b8819df9c16f708bca9c4df4aebcc3d504204"
@@ -29,7 +29,7 @@ class SerialConnection:
     def open(self):
         if self.handle is not None:
             return self.handle
-        if not self.config["serial_enabled"]:
+        if not serial_triggers_enabled(self.config):
             self.handle = _NoSerial()
             return self.handle
         factory = self.factory

@@ -15,19 +15,19 @@ from tkinter import filedialog, messagebox, ttk
 
 if __package__:
     from . import runtime
-    from .participant import HANDEDNESS_KEY, HANDEDNESS_VALUES, SEX_VALUES, ParticipantError, validate_participant
+    from .participant import HANDEDNESS_KEY, HANDEDNESS_VALUES, SEX_VALUES, ParticipantError, validate_participant, recording_confirmation_required
     from .settings import (
-        APP_DIR, CONDITION_CHOICES, CONDITION_COLUMNS, CONDITION_HELP,
+        APP_DIR, APP_NAME, CONDITION_CHOICES, CONDITION_COLUMNS, CONDITION_HELP,
         FIELD_SPECS, SETTINGS_PATH, default_settings, load_settings,
-        save_settings, session_counts, validate_settings,
+        save_settings, session_counts, validate_settings, serial_triggers_enabled,
     )
 else:
     import runtime
-    from participant import HANDEDNESS_KEY, HANDEDNESS_VALUES, SEX_VALUES, ParticipantError, validate_participant
+    from participant import HANDEDNESS_KEY, HANDEDNESS_VALUES, SEX_VALUES, ParticipantError, validate_participant, recording_confirmation_required
     from settings import (
-        APP_DIR, CONDITION_CHOICES, CONDITION_COLUMNS, CONDITION_HELP,
+        APP_DIR, APP_NAME, CONDITION_CHOICES, CONDITION_COLUMNS, CONDITION_HELP,
         FIELD_SPECS, SETTINGS_PATH, default_settings, load_settings,
-        save_settings, session_counts, validate_settings,
+        save_settings, session_counts, validate_settings, serial_triggers_enabled,
     )
 
 
@@ -465,7 +465,7 @@ class SettingsDialog(tk.Toplevel):
         self.draft = copy.deepcopy(parent.config)
         self.variables: dict[str, tk.Variable] = {}
         self.editors: dict[str, ConditionEditor] = {}
-        self.title("Necker Studio — Settings")
+        self.title(f"{APP_NAME} — Settings")
         self.configure(background=PAGE)
         self.transient(parent)
         _fit_window(self, 960, 710)
@@ -589,7 +589,7 @@ class NeckerApp(tk.Tk):
 
     def __init__(self) -> None:
         super().__init__()
-        self.title("Necker Studio")
+        self.title(APP_NAME)
         _apply_theme(self)
         _fit_window(self, 960, 760)
         self.handle = None
@@ -607,6 +607,7 @@ class NeckerApp(tk.Tk):
         self.status = tk.StringVar(self, "Ready to start a session.")
         self.output_text = tk.StringVar(self)
         self.setup_text = tk.StringVar(self)
+        self.run_help_text = tk.StringVar(self)
         self._create_menu()
         self._create_page()
         self.refresh_summary()
@@ -641,12 +642,15 @@ class NeckerApp(tk.Tk):
     def _create_page(self) -> None:
         header = ttk.Frame(self, padding=(24, 20, 24, 15))
         header.pack(fill="x")
+        header.columnconfigure(0, weight=1)
         brand = ttk.Frame(header)
-        brand.pack(side="left")
-        ttk.Label(brand, text="Necker Studio", style="Title.TLabel").pack(anchor="w")
+        brand.grid(row=0, column=0, sticky="ew")
+        title = ttk.Label(brand, text=APP_NAME, style="Title.TLabel", wraplength=700)
+        title.pack(fill="x")
+        brand.bind("<Configure>", lambda event: title.configure(wraplength=max(80, event.width - 8)))
         ttk.Label(brand, text="Perception & conditioning", style="Muted.TLabel").pack(anchor="w", pady=(3, 0))
         self.settings_button = ttk.Button(header, text="Settings…", command=self.open_settings)
-        self.settings_button.pack(side="right")
+        self.settings_button.grid(row=0, column=1, sticky="ne", padx=(16, 0))
         scroll = ScrollFrame(self)
         scroll.pack(fill="both", expand=True, padx=(20, 14))
         self._main_scroll = scroll
@@ -670,7 +674,7 @@ class NeckerApp(tk.Tk):
         setup.pack(anchor="w")
         summary.bind("<Configure>", lambda event: setup.configure(wraplength=max(240, event.width - 44)), add="+")
         run = self._card(scroll.content, "Run session")
-        run_help = ttk.Label(run, text="Launch Experiment opens the participant form, followed by the Sophia Mode recording check when enabled. Use File > Settings to adjust the experiment. Press Escape in the experiment to stop.",
+        run_help = ttk.Label(run, textvariable=self.run_help_text,
                             style="CardMuted.TLabel", wraplength=590)
         run_help.pack(anchor="w", pady=(5, 14))
         run.bind("<Configure>", lambda event: run_help.configure(wraplength=max(240, event.width - 44)))
@@ -688,7 +692,7 @@ class NeckerApp(tk.Tk):
         output.bind("<Configure>", lambda event: output_label.configure(wraplength=max(240, event.width - 44)), add="+")
         ttk.Button(output, text="Open output folder", command=self.open_output).pack(anchor="w")
         footer = ttk.Frame(self, padding=(24, 10, 24, 12))
-        footer.pack(fill="x")
+        footer.pack(side="bottom", fill="x", before=scroll)
         self.badge = tk.Label(footer, text="READY", foreground=ACCENT, background="#dceeee", padx=9, pady=5,
                               font=("Segoe UI", 9, "bold"))
         self.badge.pack(side="left", padx=(0, 12))
@@ -707,10 +711,24 @@ class NeckerApp(tk.Tk):
         for key, variable in self.count_labels.items():
             variable.set(str(counts[key]))
         serial = (f"Serial markers: {self.config['serial_port']} · {self.config['serial_baud']} baud"
-                  if self.config["serial_enabled"] else "Serial markers: disabled")
+                  if serial_triggers_enabled(self.config) else "Serial markers: disabled")
         mode = "fullscreen" if self.config["full_screen"] else "windowed"
-        self.setup_text.set(f"{counts['total']} trials total  ·  Display {self.config['screen']} ({mode})  ·  {serial}")
+        prefix = "TEST MODE  ·  " if self.config["test_mode"] else ""
+        self.setup_text.set(f"{prefix}{counts['total']} trials total  ·  Display {self.config['screen']} ({mode})  ·  {serial}")
         self.output_text.set(str(runtime.output_directory(self.config)))
+        test_mode = self.config["test_mode"]
+        self.start_button.configure(text="Launch Test Experiment" if test_mode else "Launch Experiment")
+        self.badge.configure(text="TEST MODE" if test_mode else "READY",
+                             foreground="#9a3412" if test_mode else ACCENT,
+                             background="#ffedd5" if test_mode else "#dceeee")
+        self.run_help_text.set(
+            "Test mode is enabled. Launch a test without participant entry, COM3, or the BioSemi recording check. "
+            "Full-screen and timing settings still apply. Results are marked TEST and saved under test_runs. "
+            "Press Escape in the experiment to stop."
+            if test_mode else
+            "Launch Experiment opens the participant form, followed by the Sophia Mode recording check when enabled. "
+            "Use File > Settings to adjust the experiment. Press Escape in the experiment to stop."
+        )
 
     def open_settings(self) -> None:
         if self.busy:
@@ -735,6 +753,14 @@ class NeckerApp(tk.Tk):
     def _confirm_recording(self):
         return BioSemiRecordingConfirmationDialog(self).show()
 
+    def _confirm_test_mode(self):
+        return messagebox.askyesno(
+            "Launch test experiment?",
+            "Test mode is enabled. This run will not use COM3 or require BioSemi recording or participant details.\n\n"
+            "Full-screen and timing settings still apply. Output will be marked TEST and saved in the test_runs folder.\n\n"
+            "Launch the test experiment?", parent=self,
+        )
+
     def start(self) -> None:
         if self.busy:
             return
@@ -742,12 +768,19 @@ class NeckerApp(tk.Tk):
         self._set_busy(True)
         try:
             config = validate_settings(copy.deepcopy(self.config))
-            participant = self._participant_details()
-            if participant is None:
-                self.status.set("Launch cancelled. No session was started.")
-                return
-            recording_confirmed = config["sophia_mode"] and self._confirm_recording()
-            if config["sophia_mode"] and not recording_confirmed:
+            if config["test_mode"]:
+                if not self._confirm_test_mode():
+                    self.status.set("Test launch cancelled. No session was started.")
+                    return
+                participant = None
+            else:
+                participant = self._participant_details()
+                if participant is None:
+                    self.status.set("Launch cancelled. No session was started.")
+                    return
+            needs_recording = recording_confirmation_required(config)
+            recording_confirmed = needs_recording and self._confirm_recording()
+            if needs_recording and not recording_confirmed:
                 self.status.set("Launch cancelled at the BioSemi recording check.")
                 return
         except ValueError as exc:
@@ -789,8 +822,9 @@ class NeckerApp(tk.Tk):
         self.handle = value
         self.log_button.configure(state="normal")
         self.stop_button.configure(state="normal")
-        self.badge.configure(text="RUNNING", foreground=ACCENT, background="#dceeee")
-        self.status.set("Session running. PsychoPy controls the presentation window.")
+        self.badge.configure(text="TEST RUN" if self.config["test_mode"] else "RUNNING", foreground=ACCENT, background="#dceeee")
+        self.status.set("Test session running. COM3 and BioSemi recording checks are bypassed."
+                        if self.config["test_mode"] else "Session running. PsychoPy controls the presentation window.")
         self.output_text.set(str(self.handle.session_dir))
         if self._closing:
             self.stop()
@@ -857,7 +891,7 @@ class NeckerApp(tk.Tk):
         if self.busy:
             if self._closing:
                 return
-            if messagebox.askyesno("Stop and close?", "A session is active. Request a safe stop, wait for data to save, and close Necker Studio?", parent=self):
+            if messagebox.askyesno("Stop and close?", f"A session is active. Request a safe stop, wait for data to save, and close {APP_NAME}?", parent=self):
                 self._closing = True
                 self.stop()
             return

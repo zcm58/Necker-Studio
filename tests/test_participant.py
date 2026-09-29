@@ -51,6 +51,7 @@ class LaunchSettingsTests(unittest.TestCase):
     def test_existing_settings_keep_output_and_calibration_when_sophia_is_added(self):
         original = default_settings()
         original.pop('sophia_mode')
+        original.pop('test_mode')
         original.update(output_dir='D:/2 - Results/Necker Cube/Necker Response Results',
                         monitor_width_cm=53.0, monitor_distance_cm=80.0)
         with tempfile.TemporaryDirectory() as temporary:
@@ -58,14 +59,17 @@ class LaunchSettingsTests(unittest.TestCase):
             path.write_text(json.dumps(original))
             loaded = load_settings(path)
             self.assertTrue(loaded.pop('sophia_mode'))
+            self.assertFalse(loaded.pop('test_mode'))
             self.assertEqual(loaded, original)
             loaded['sophia_mode'] = False
+            loaded['test_mode'] = True
             save_settings(loaded, path)
             self.assertEqual(load_settings(path), loaded)
 
     def test_defaults_enable_sophia_and_lock_port(self):
         config = default_settings()
         self.assertTrue(config['sophia_mode'])
+        self.assertFalse(config['test_mode'])
         for port in ('COM1', 'COM9', '/dev/ttyUSB0'):
             with self.subTest(port=port), self.assertRaisesRegex(ValueError, 'locked to COM3'):
                 validate_settings({**config, 'serial_port': port})

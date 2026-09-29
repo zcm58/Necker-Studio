@@ -16,6 +16,7 @@ from typing import Any
 
 
 APP_DIR = Path(__file__).resolve().parent
+APP_NAME = "Nicholas's Nice Necker Cube Experiment"
 SETTINGS_PATH = APP_DIR / "settings.json"
 DEFAULTS_PATH = APP_DIR / "defaults.json"
 ASSETS_DIR = APP_DIR / "assets"
@@ -34,9 +35,11 @@ FIELD_SPECS = [
     _field("psychopy_python", "PsychoPy Python", "General", "file", "",
            help="Leave blank to find an installed PsychoPy Python automatically, or choose its python.exe."),
     _field("output_dir", "Results folder", "General", "directory", "data",
-           help="Saved across launches. Relative folders are inside Necker Studio. Each session creates its own folder here."),
+           help="Saved across launches. Relative folders are inside the application folder. Each session creates its own folder here."),
+    _field("test_mode", "Enable test mode", "General", "bool", False,
+           help="Run without COM3 or BioSemi: skips serial hardware, demographics, and Sophia Mode. Full-screen and timing settings still apply. Test output is saved separately under test_runs."),
     _field("sophia_mode", "Sophia Mode: confirm BioSemi recording", "General", "bool", True,
-           help="Before each launch, require the administrator to check that BioSemi is recording and type Confirm. This is an operator check, not automatic recording detection."),
+           help="Before each normal launch, require the administrator to check that BioSemi is recording and type Confirm. Skipped in test mode. This is an operator check, not automatic recording detection."),
     _field("full_screen", "Full screen", "Display", "bool", True,
            help="Present the experiment full screen, as in the reference project."),
     _field("window_width", "Window width (pixels)", "Display", "int", 1920, 64, 16384,
@@ -54,7 +57,7 @@ FIELD_SPECS = [
     _field("cube_height_deg", "Cube height (degrees)", "Display", "float", 5.25, 0.01, 180),
     _field("volume", "Sound volume (0–1)", "Audio & triggers", "float", 1.0, 0, 1),
     _field("serial_enabled", "Enable serial triggers", "Audio & triggers", "bool", True,
-           help="Enabled in the reference. Disable only for sessions that do not use the trigger device."),
+           help="Enabled in the reference. Test mode always bypasses serial hardware while preserving this preference for normal runs."),
     _field("serial_port", "Serial port (locked)", "Audio & triggers", "str", SERIAL_PORT,
            help="Fixed to COM3 for this experiment; this field cannot be edited."),
     _field("serial_baud", "Serial baud rate", "Audio & triggers", "int", 115200, 1, 4000000),
@@ -259,9 +262,15 @@ def load_settings(path=SETTINGS_PATH) -> dict[str, Any]:
         # resetting the output directory, calibration, or protocol settings.
         if isinstance(config, dict) and config.get("schema_version") == 1:
             config.setdefault("sophia_mode", True)
+            config.setdefault("test_mode", False)
         return validate_settings(config)
     except ValueError as exc:
         raise ValueError(f"Invalid settings in {path}: {exc}") from exc
+
+
+def serial_triggers_enabled(config: dict[str, Any]) -> bool:
+    """Test mode suppresses hardware without changing the normal-run preference."""
+    return config["serial_enabled"] and not config["test_mode"]
 
 
 def save_settings(config: dict[str, Any], path=SETTINGS_PATH) -> dict[str, Any]:

@@ -59,6 +59,20 @@ def validate_participant(values: dict) -> dict:
             "manual_removed_electrodes": labels}
 
 
+def session_participant(config: dict, values: dict | None) -> dict:
+    """Use explicitly nonparticipant metadata for a hardware-free test run."""
+    if config["test_mode"]:
+        return {"participant_ID": "TEST", "age": None, "sex": None,
+                HANDEDNESS_KEY: None, "colorblind": None, "manual_removed_electrodes": []}
+    if not isinstance(values, dict):
+        raise ParticipantError("participant_ID", "Participant details are required for a normal session.")
+    return validate_participant(values)
+
+
+def recording_confirmation_required(config: dict) -> bool:
+    return config["sophia_mode"] and not config["test_mode"]
+
+
 def require_recording_confirmation(config: dict, confirmed: bool) -> None:
-    if config["sophia_mode"] and confirmed is not True:
+    if recording_confirmation_required(config) and confirmed is not True:
         raise ValueError("Sophia Mode requires confirmation that the BioSemi PC is recording before launching.")

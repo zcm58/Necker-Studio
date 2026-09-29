@@ -1,4 +1,4 @@
-# Necker Studio
+# Nicholas's Nice Necker Cube Experiment
 
 A standalone operator interface for `__NEW_NECKER.psyexp`, with a File > Settings dialog and an FPVS Studio inspired light interface. PsychoPy still performs stimulus presentation, audio, response collection, and timing. Builder is not needed to run or configure a session.
 
@@ -7,7 +7,7 @@ A standalone operator interface for `__NEW_NECKER.psyexp`, with a File > Setting
 This machine's project is **C:\Users\zcm58\PyCharmProjects\Necker-Studio**.
 
 1. Open that folder in PyCharm.
-2. Select the saved **Necker Studio** run configuration and press Run, or right-click **main.py** and choose Run.
+2. Select the saved **Nicholas's Nice Necker Cube Experiment** run configuration and press Run, or right-click **main.py** and choose Run.
 
 The project interpreter is **.venv\Scripts\python.exe**, running **Python 3.12.14** with **PsychoPy 2026.2.4**. Python itself lives in the project's ignored `.python` folder. Dependencies are installed in `.venv`; system site-packages are disabled. The launcher automatically prefers this local environment, including when main.py is launched by another Python installation.
 
@@ -16,6 +16,12 @@ The File > Settings dialog configures the experiment. No source, JSON, or spread
 Click **Launch Experiment** to open **Participant Information**. Like FPVS Studio, it requires a digits-only participant number (leading zeroes are retained), a whole-number age from 1 to 120, and selections for sex, handedness, and colorblind status. Sex offers Female/Male; handedness offers Right handed/Left handed/Ambidextrous. Optional manually removed electrodes are normalized and saved with the session. Participant details are requested afresh on every launch.
 
 **Sophia Mode is enabled by default.** After demographics, the administrator must check that the BioSemi PC is recording and type **Confirm**. This is the same typed operator acknowledgment used in FPVS Studio; it does not automatically detect recording. Cancelling either dialog leaves the experiment stopped. The worker also rejects missing confirmation before opening PsychoPy or COM3. The confirmation is saved with that session and never reused for a later launch. Sophia Mode can be explicitly disabled in General settings for runs that do not require recording.
+
+## Test mode
+
+Open **File > Settings > General**, check **Enable test mode**, and click **Save settings**. The launcher displays **TEST MODE** and a **Launch Test Experiment** button. As in FPVS Studio, launching asks for a test-run acknowledgment instead of demographics and skips Sophia Mode. The COM3 connection is never opened, checked, or written to, even when the normal serial-trigger setting is enabled. Full-screen presentation, trial counts, timing, responses, and stop controls use the selected experiment settings.
+
+Test output is saved in a **test_runs** subfolder of the selected results folder, using participant ID **TEST**, empty demographics, and a `test_mode` flag in the CSV. It does not report BioSemi recording confirmation or enabled serial hardware. Uncheck **Enable test mode** and save to restore the normal participant and recording workflow; the existing serial and Sophia Mode preferences are preserved. Test mode is off by default, including when older settings files are loaded. Its selection persists when saved.
 
 ## Recreate the environment on Windows
 
@@ -35,7 +41,7 @@ The results folder persists across launches in the project's local `settings.jso
 
 | Section | Controls |
 | --- | --- |
-| General | PsychoPy interpreter, output directory, Sophia Mode |
+| General | PsychoPy interpreter, output directory, test mode, Sophia Mode |
 | Display | Full screen, display number, pixel dimensions, monitor calibration, cube size in degrees |
 | Audio & triggers | Volume, serial enable/disable, locked COM3 port, baud rate |
 | Trial counts | Practice, baseline, conditioning, final-measurement blocks/repetitions and demonstrations |
@@ -91,7 +97,9 @@ The **Open output folder** and **View run log** buttons provide access. A stop o
 
 Run the automated tests with `python -m unittest discover -s tests -v` from this folder. The tests do not require PsychoPy, a display, or serial hardware. They cover the protocol, condition fixtures, timing changes, response semantics, saved settings, invalid settings, output isolation, audio compatibility, and the exclusive-port regression.
 
-Ten additional Tk interface tests are opt-in: set `NECKER_GUI_SMOKE=1` in the test run's environment. They briefly open windows but never launch an experiment or contact hardware. All **55 tests**, including these interface tests, passed on the development machine. Coverage includes saved-folder migration, locked COM3, required demographics, fresh typed recording confirmation, cancellation, and settings at minimum size and with larger text.
+Twelve additional Tk interface tests are opt-in: set `NECKER_GUI_SMOKE=1` in the test run's environment. They briefly open windows but never launch an experiment or contact hardware. All **59 tests**, including these interface tests, passed on the development machine. Coverage includes saved-folder migration, locked COM3, required demographics, fresh typed recording confirmation, cancellation, settings at minimum size and with larger text, test-mode hardware suppression, separate test output, and restoration of normal launch checks. The generated stimulus source is identical when only test mode is toggled.
+
+A full-screen test-mode session completed all 30 accelerated trials and four demonstrations with serial access explicitly blocked. Its CSV rows correctly identify the TEST participant, test mode, disabled serial hardware, and absent recording confirmation.
 
 Validation on **Python 3.12.14 with PsychoPy 2026.2.4** included a complete accelerated 30-trial session plus four demonstrations with simulated responses. All phases completed, outputs were saved, and the process exited successfully. Earlier validation also included the Tk settings/run-state interface, a real PsychoPy startup with cooperative abort and saved data. The complete session produced CSV, psydat, and log files and reached the thanks screen. Test output is separate from participant output. The full-screen layout was also checked at 1920×1080: captured instruction and recap frames contained all text and artwork without clipping. The earlier 800×600 smoke window was too small for the original layout; full screen remains the default. Physical COM3 trigger delivery and laboratory audiovisual timing have not been measured.
 
