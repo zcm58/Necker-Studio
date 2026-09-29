@@ -1,0 +1,30 @@
+name: Build Windows keyboard dependency
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Install build tools into the runner environment
+        run: python -m pip install --upgrade pip setuptools wheel swig
+      - name: Build the unchanged PyPI pyWinhook source for CPython 3.12
+        run: python -m pip wheel --no-deps --no-build-isolation --no-binary pywinhook pywinhook==1.6.2 --wheel-dir wheelhouse
+      - name: Verify the compiled keyboard hook imports
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem wheelhouse/pywinhook*.whl | Select-Object -First 1).FullName
+          python -m pip install $wheel pywin32
+          python -c "import pyWinhook; print(pyWinhook.__file__)"
+          Get-FileHash $wheel -Algorithm SHA256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pywinhook-cp312-windows
+          path: wheelhouse/*.whl
+          if-no-files-found: error

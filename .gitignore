@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+.python/
+.tools/
+.idea/
+.verification/
+settings.json
+data/
+*.log
+*.psydat
+*.csv
+*.zip
+.env
+.env.*
+!.env.example

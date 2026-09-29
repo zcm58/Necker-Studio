@@ -1,0 +1,9 @@
+* text=auto
+*.py text eol=lf
+*.md text eol=lf
+*.ps1 text eol=crlf
+# Frozen Builder references are byte-checked; never normalize their newlines.
+/reference/experiment_source.py -text
+/reference/__NEW_NECKER.psyexp -text
+*.png -text
+*.wav -text
