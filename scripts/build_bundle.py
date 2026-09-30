@@ -11,7 +11,7 @@ import sys
 import tomllib
 
 PROJECT = Path(__file__).resolve().parents[1]
-APP_FILES = ('main.py', 'gui.py', 'settings.py', 'runtime.py', 'adapter.py',
+APP_FILES = ('main.py', 'gui.py', 'settings.py', 'runtime.py', 'adapter.py', 'triggers.py',
              'participant.py', 'presentation.py', 'window_layout.py', 'app_paths.py',
              'defaults.json', 'README.md', 'requirements.txt', 'requirements.in', 'pyproject.toml')
 
@@ -35,6 +35,10 @@ def main():
     commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=PROJECT, text=True).strip()
     if subprocess.check_output(['git', 'status', '--porcelain'], cwd=PROJECT, text=True).strip():
         raise SystemExit('Commit source changes before building a release.')
+    # A release must pass the transport, normal/test-mode selection, source-site
+    # and worker error/export regressions; none of these tests touch hardware.
+    subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests',
+                    '-p', 'test_trigger*.py', '-q'], cwd=PROJECT, check=True)
     runtime = output / 'runtime'
     runtime.mkdir(parents=True)
     base = Path(sys.base_prefix)
@@ -81,9 +85,20 @@ def main():
     probe = ('import sys, tkinter, psychopy, serial, pyWinhook, pyglet; '
              'assert sys.version_info[:3] == (3,12,14); '
              'assert psychopy.__version__ == "2026.2.4"; '
-             'import psychopy.visual, psychopy.sound, psychopy.iohub; '
+             'import psychopy.visual, psychopy.sound, psychopy.iohub; import triggers; '
              'print("Bundled Python, Tk, PsychoPy, audio, ioHub and serial imports passed.")')
     subprocess.run([str(runtime / 'python.exe'), '-E', '-s', '-B', '-c', probe], check=True, cwd=app)
+    trigger_probe = (
+        'from adapter import build_source; from settings import default_settings; '
+        'from triggers import SerialConnection; from unittest.mock import Mock; '
+        'c=default_settings(); build_source(c); p=Mock(); p.write.return_value=1; '
+        's=SerialConnection(c, factory=Mock(return_value=p)); s.open(); '
+        's.send(1, label="initial_baseline"); s.send(2, label="initial_conditioned"); '
+        's.validate_completion(0); s.send(255); '
+        'assert p.write.call_args.args == (bytes([255]),); s.close(); '
+        'print("Packaged BioSemi trigger safeguards passed.")'
+    )
+    subprocess.run([str(runtime / 'python.exe'), '-E', '-s', '-B', '-c', trigger_probe], check=True, cwd=app)
     subprocess.run([str(runtime / 'python.exe'), '-E', '-s', '-B', '-m', 'pip', 'check'], check=True)
     manifest = {}
     for path in sorted(output.rglob('*')):

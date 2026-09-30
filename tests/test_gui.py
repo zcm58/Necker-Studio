@@ -297,6 +297,16 @@ class GuiSmokeTests(unittest.TestCase):
             self.recording_dialog.assert_called_once()
             self.assertTrue(launch.call_args.kwargs["recording_confirmed"])
 
+    def test_normal_disabled_triggers_block_before_demographics_or_launch(self):
+        self.app.config['serial_enabled'] = False
+        with patch.object(gui.runtime, 'start_session') as launch:
+            self.app.start()
+            launch.assert_not_called()
+            self.participant_dialog.assert_not_called()
+            self.recording_dialog.assert_not_called()
+            self.error.assert_called_once()
+            self.assertIn('required for normal runs', str(self.error.call_args))
+
     def test_cancel_test_acknowledgment_never_launches(self):
         self.app.config["test_mode"] = True
         with patch.object(self.app, "_confirm_test_mode", return_value=False), \

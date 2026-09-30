@@ -283,10 +283,10 @@ class SerialOwnershipTests(unittest.TestCase):
         self.assertEqual(len(opened), 1)
         first.write(b"\x01")
         second.write(b"\x02")
-        self.assertEqual(first.writes, [b"\x01", b"\x02"])
+        self.assertEqual(opened[0][2].writes, [b"\x01", b"\x02"])
         connection.close()
         connection.close()
-        self.assertEqual(first.close_calls, 1)
+        self.assertEqual(opened[0][2].close_calls, 1)
         self.assertFalse(state["active"])
 
 

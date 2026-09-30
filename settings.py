@@ -61,7 +61,7 @@ FIELD_SPECS = [
     _field("cube_height_deg", "Cube height (degrees)", "Display", "float", 5.25, 0.01, 180),
     _field("volume", "Sound volume (0–1)", "Audio & triggers", "float", 1.0, 0, 1),
     _field("serial_enabled", "Enable serial triggers", "Audio & triggers", "bool", True,
-           help="Enabled in the reference. Test mode always bypasses serial hardware while preserving this preference for normal runs."),
+           help="Required for normal runs. Use Enable test mode to run without BioSemi hardware."),
     _field("serial_port", "Serial port (locked)", "Audio & triggers", "str", SERIAL_PORT,
            help="Fixed to COM3 for this experiment; this field cannot be edited."),
     _field("serial_baud", "Serial baud rate", "Audio & triggers", "int", 115200, 1, 4000000),

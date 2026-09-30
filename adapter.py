@@ -10,56 +10,14 @@ import hashlib
 import re
 
 if __package__:
-    from .settings import APP_DIR, default_settings, validate_settings, serial_triggers_enabled
+    from .settings import APP_DIR, default_settings, validate_settings
+    from .triggers import SerialConnection
 else:
-    from settings import APP_DIR, default_settings, validate_settings, serial_triggers_enabled
+    from settings import APP_DIR, default_settings, validate_settings
+    from triggers import SerialConnection
 
 REFERENCE = APP_DIR / "reference" / "experiment_source.py"
 REFERENCE_SHA256 = "0a0ce03f9fc72d15bf38b5319e6b8819df9c16f708bca9c4df4aebcc3d504204"
-
-
-class SerialConnection:
-    """Own one physical handle, including when Builder asks to open it twice."""
-
-    def __init__(self, config, factory=None):
-        self.config = config
-        self.factory = factory
-        self.handle = None
-
-    def open(self):
-        if self.handle is not None:
-            return self.handle
-        if not serial_triggers_enabled(self.config):
-            self.handle = _NoSerial()
-            return self.handle
-        factory = self.factory
-        if factory is None:
-            import serial
-            factory = serial.Serial
-        try:
-            self.handle = factory(port=self.config["serial_port"],
-                                  baudrate=self.config["serial_baud"])
-        except Exception as exc:
-            raise RuntimeError(
-                f"Could not open {self.config['serial_port']}: {exc}\n"
-                "Close any other program using COM3 and check the trigger device connection. "
-                "The port is locked to COM3. Disable serial triggers in File > Settings "
-                "only for a session without the trigger device."
-            ) from exc
-        return self.handle
-
-    def close(self):
-        if self.handle is not None:
-            handle, self.handle = self.handle, None
-            handle.close()
-
-
-class _NoSerial:
-    def write(self, value):
-        return len(value)
-
-    def close(self):
-        pass
 
 
 def select_audio_backend(preference, available):
@@ -91,6 +49,14 @@ def build_source(config):
     source = _replace(source, 'serial.Serial(port = "COM3" , baudrate = 115200)',
                       'open_serial()', 2)
     source = _replace(source, 'port.close();', 'close_serial();', 2)
+    # Preserve the three original call sites; encode marker values as raw bytes
+    # inside the checked transport, never via UTF-8 chr(...). No new markers.
+    source = _replace(source, '\n    port.write(str.encode(chr(1)))',
+                      '\n    send_trigger(1, label="initial_baseline")', 1)
+    source = _replace(source, '\n    port.write(str.encode(chr(2)))',
+                      '\n    send_trigger(2, label="initial_conditioned")', 1)
+    source = _replace(source, '\n        port.write(str.encode(chr(1)))',
+                      '\n        send_trigger(1, label="practice_start")', 1)
     source = _replace(source, "= prefs.hardware['audioLib']", '= studio_audio_backend', 2)
     source = _replace(source, 'data.importConditions(', 'get_conditions(', 6)
     source = _replace(source, 'if defaultKeyboard.getKeys(keyList=["escape"]):',
@@ -160,5 +126,26 @@ def build_source(config):
     if (config['cube_width_deg'], config['cube_height_deg']) != (6, 5.25):
         source = _replace(source, 'size=(6, 5.25)',
                           f"size=({config['cube_width_deg']!r}, {config['cube_height_deg']!r})", 4)
-    ast.parse(source)
+    validate_trigger_sites(source)
     return source
+
+
+def validate_trigger_sites(source):
+    """Reject absent or displaced marker calls before opening hardware."""
+    tree = ast.parse(source)
+    run = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'run')
+    calls = sorted((n for n in ast.walk(run) if isinstance(n, ast.Call)
+                    and isinstance(n.func, ast.Name) and n.func.id == 'send_trigger'),
+                   key=lambda n: n.lineno)
+    actual = [(ast.literal_eval(n.args[0]),
+               ast.literal_eval(next(k.value for k in n.keywords if k.arg == 'label')))
+              for n in calls]
+    if actual != [(1, 'initial_baseline'), (2, 'initial_conditioned'), (1, 'practice_start')]:
+        raise RuntimeError('Trigger integration mismatch: original marker schedule is missing or changed.')
+    top_calls = [n.value for n in run.body if isinstance(n, ast.Expr)]
+    practice = next(n for n in ast.walk(run) if isinstance(n, ast.For)
+                    and isinstance(n.iter, ast.Name) and n.iter.id == 'trials_9')
+    if calls[0] not in top_calls or calls[1] not in top_calls or calls[2] not in list(ast.walk(practice)):
+        raise RuntimeError('Trigger integration mismatch: marker placement changed.')
+    if any(isinstance(n, ast.Call) and ast.unparse(n.func) == 'port.write' for n in ast.walk(tree)):
+        raise RuntimeError('Trigger integration mismatch: unchecked serial write.')

@@ -2,9 +2,9 @@
 
 A standalone operator interface for `__NEW_NECKER.psyexp`, with a File > Settings dialog and an FPVS Studio inspired light interface. PsychoPy still performs stimulus presentation, audio, response collection, and timing. Builder is not needed to run or configure a session.
 
-## Windows release 1.0
+## Windows release 1.1
 
-Download the x64 installer from [GitHub Releases](https://github.com/zcm58/Necker-Studio/releases/tag/v1.0).
+Download the x64 installer from [GitHub Releases](https://github.com/zcm58/Necker-Studio/releases/tag/v1.1).
 It includes Python 3.12.14 and the pinned PsychoPy environment; no separate Python or PsychoPy installation is required.
 The installer runs per user and creates a Start menu shortcut. A desktop shortcut is optional.
 Installed settings and relative output folders live under `%LOCALAPPDATA%\NicholasNiceNeckerCubeExperiment`.
@@ -20,7 +20,7 @@ This machine's project is **C:\Users\zcm58\PyCharmProjects\Necker-Studio**.
 
 The project interpreter is **.venv\Scripts\python.exe**, running **Python 3.12.14** with **PsychoPy 2026.2.4**. Python itself lives in the project's ignored `.python` folder. Dependencies are installed in `.venv`; system site-packages are disabled. The launcher automatically prefers this local environment, including when main.py is launched by another Python installation.
 
-The File > Settings dialog configures the experiment. No source, JSON, or spreadsheet edits are required. Serial is enabled on COM3 by default. The port is locked; disable serial explicitly for a session without that hardware.
+The File > Settings dialog configures the experiment. No source, JSON, or spreadsheet edits are required. Serial is enabled on COM3 by default and the port is locked. Normal runs require serial output; use **Enable test mode** for a session without BioSemi hardware.
 
 Click **Launch Experiment** to open **Participant Information**. Like FPVS Studio, it requires a digits-only participant number (leading zeroes are retained), a whole-number age from 1 to 120, and selections for sex, handedness, and colorblind status. Sex offers Female/Male; handedness offers Right handed/Left handed/Ambidextrous. Optional manually removed electrodes are normalized and saved with the session. Participant details are requested afresh on every launch.
 
@@ -61,7 +61,7 @@ The demonstration table retains exactly four rows because the reference uses the
 
 Stimuli are specified in visual degrees. By default the app uses the existing `testMonitor` calibration. If it is missing or incomplete, choose a calibrated monitor profile or enter the measured monitor width, viewing distance, and display pixel dimensions in Settings. Calibration overrides apply to this app's sessions without changing the saved PsychoPy monitor profile.
 
-Serial triggers are enabled by default on **COM3 at 115200 baud**, matching the source. Disable them explicitly for sessions without the trigger device. Another program can still prevent access by holding the port; the app reports that case with instructions to close the other program and check the connection. The port is fixed to COM3 in both the interface and settings validation.
+Serial triggers are enabled by default on **COM3 at 115200 baud**, matching the source. Normal runs reject disabled serial output; only explicit test mode permits log-only markers. Another program can still prevent access by holding the port; the app reports that case with instructions to close the other program and check the connection. The port is fixed to COM3 in both the interface and settings validation.
 
 ## Default protocol
 
@@ -83,9 +83,26 @@ Fidelity details intentionally preserved:
 - The blank interval tests `randint(62,125)` again each frame. It is not a single uniform duration sampled at trial onset.
 - Choice responses retain queued arrow-key events, as configured by the source.
 - Conditioning has two separate space-response windows, both of which can end early. Both response fields remain in the data.
-- The existing trigger bytes and locations are retained: bytes 1 and 2 during initialization and byte 1 at practice-cube onset. The disabled trigger code remains disabled. This build does not silently move trigger writes to phase boundaries or frame flips.
+- The existing trigger bytes and call locations are retained: bytes 1 and 2 during initialization, then byte 1 at each practice routine's start (before its first flip). The original source has no per-trial marker writes in the main measurement or conditioning phases. Markers remain at these original locations, rather than adopting FPVS's distinct frame-locked event schedule.
 
 ## Repairs and compatibility
+
+Version 1.1 adds the applicable BioSemi safeguards from FPVS Studio (reference commit `be06531f828663030246a4be3b2bfa588b7bb2ba`, `triggers/serial_backend.py`, `runtime/triggers.py`, and `runtime/recording.py`):
+
+| Protection | Necker regression coverage |
+| --- | --- |
+| Normal runs require serial output; only a boolean test-mode flag permits null output | `test_triggers.py`, `test_trigger_worker.py`, `test_gui.py` |
+| COM3 opens once, before presentation, with explicit 8N1, nonblocking writes and flow control off | `test_triggers.py`, `test_fidelity.py` |
+| Codes 1–255 use exactly one raw byte; zero, invalid codes and UTF-8 multi-byte payloads are rejected | `test_triggers.py` (all 255 valid values) |
+| No automatic reset, flush, delay, retry, alternate port or fallback after failure | `test_triggers.py` |
+| Missing dependencies, failed opens, disconnected ports and short/extra writes fail clearly | `test_triggers.py`, `test_trigger_worker.py` |
+| Successful writes, explicit test skips and errors are distinguished in exported records | `test_triggers.py`, `test_trigger_worker.py` |
+| Missing, extra, reordered or suppressed marker calls cannot report a completed session | source-site guard in `adapter.py`, completion audit in `triggers.py`, both tested |
+| Failure preserves collected data, logs the error and closes the port | `test_trigger_worker.py` |
+
+Every run exports `trigger_log.csv`; `result.json` includes trigger counts and transport identity. `sent` means the serial API accepted one byte, not proof of BioSemi acquisition. The log clock is seconds since connection construction, not a frame-onset timestamp. No log file IO occurs during stimulus presentation. A normal completed run must match the original schedule: two initialization markers plus one per practice trial. Aborted runs retain their partial audit without being treated as completed.
+
+The bundle build runs the trigger regression suite before packaging and probes the checked transport inside the packaged interpreter. These checks use fake serial devices and never send codes to acquisition hardware. Physical cable/status-channel receipt still needs a BioSemi recording check.
 
 The supplied error log fails at the **second open of COM3**. The original generated script opens the same exclusive port twice. This app owns one connection and reuses it for both calls, then closes it on completion, Escape, operator stop, or failure. Repeated close requests are harmless. A regression test uses a fake exclusive serial port that would fail on a second open.
 
@@ -101,6 +118,7 @@ Each run gets a unique directory inside the selected output folder. By default t
 - `session.json`: the exact settings and condition rows used, participant metadata, BioSemi operator confirmation, and selected interpreter.
 - `runner.log`: startup and runtime diagnostics.
 - `result.json`: completion/abort/failure status and data filename.
+- `trigger_log.csv`: each marker's code, call-site label, time, transport, sent/skipped/error status and error message.
 
 The **Open output folder** and **View run log** buttons provide access. A stop or runtime error attempts to save all data collected so far. The participant number, age, sex, and handedness retain their original Necker column names; colorblind status, removed electrodes, and recording confirmation are additional metadata. Existing participant data in the original project is untouched.
 
@@ -108,7 +126,7 @@ The **Open output folder** and **View run log** buttons provide access. A stop o
 
 Run the automated tests with `python -m unittest discover -s tests -v` from this folder. The tests do not require PsychoPy, a display, or serial hardware. They cover the protocol, condition fixtures, timing changes, response semantics, saved settings, invalid settings, output isolation, audio compatibility, and the exclusive-port regression.
 
-Twelve additional Tk interface tests are opt-in: set `NECKER_GUI_SMOKE=1` in the test run's environment. They briefly open windows but never launch an experiment or contact hardware. All **65 tests**, including these interface tests, passed on the development machine. Coverage includes saved-folder migration, locked COM3, required demographics, fresh typed recording confirmation, cancellation, settings at minimum size and with larger text, test-mode hardware suppression, separate test output, installed paths, screen margins, and restoration of normal launch checks. The generated stimulus source is identical when only test mode is toggled.
+Thirteen additional Tk interface tests are opt-in: set `NECKER_GUI_SMOKE=1` in the test run's environment. They briefly open windows but never launch an experiment or contact hardware. All **88 tests**, including these interface tests, passed on the development machine. Coverage includes saved-folder migration, locked COM3, required demographics, fresh typed recording confirmation, cancellation, settings at minimum size and with larger text, test-mode hardware suppression, separate test output, installed paths, screen margins, and restoration of normal launch checks. The generated stimulus source is identical when only test mode is toggled.
 
 A full-screen test-mode session completed all 30 accelerated trials and four demonstrations with serial access explicitly blocked. Its CSV rows correctly identify the TEST participant, test mode, disabled serial hardware, and absent recording confirmation.
 

@@ -15,10 +15,12 @@ from pathlib import Path
 
 if __package__:
     from .app_paths import STATE_DIR, bundled_python
+    from .triggers import require_trigger_output
     from .settings import APP_DIR, condition_rows, validate_settings, serial_triggers_enabled
     from .participant import session_participant, require_recording_confirmation
 else:
     from app_paths import STATE_DIR, bundled_python
+    from triggers import require_trigger_output
     from settings import APP_DIR, condition_rows, validate_settings, serial_triggers_enabled
     from participant import session_participant, require_recording_confirmation
 
@@ -86,6 +88,7 @@ class SessionHandle:
 
 def start_session(config, participant=None, *, recording_confirmed=False):
     config = validate_settings(config)
+    require_trigger_output(config)
     info = session_participant(config, participant)
     if config['test_mode']:
         recording_confirmed = False
@@ -156,6 +159,7 @@ def run_worker(request_path):
     try:
         payload = json.loads(request_path.read_text(encoding='utf-8'))
         config = validate_settings(payload['settings'])
+        require_trigger_output(config)
         payload['participant'] = session_participant(config, payload.get('participant'))
         if config['test_mode']:
             payload['biosemi_recording_confirmed'] = False
@@ -187,6 +191,7 @@ def run_worker(request_path):
             '__file__': str(APP_DIR / 'assets' / 'experiment.py'),
             'open_serial': connection.open,
             'close_serial': connection.close,
+            'send_trigger': connection.send,
             'get_conditions': lambda filename, selection=None: condition_rows(config, filename, selection),
             'check_abort': check_abort,
             'studio_monitor': monitor,
@@ -223,6 +228,8 @@ def run_worker(request_path):
             namespace['setupDevices'](expInfo=info, thisExp=experiment, win=window)
             if not check_abort([]):
                 namespace['run'](expInfo=info, thisExp=experiment, win=window, globalClock='float')
+        if not aborted:
+            connection.validate_completion(len(config['conditions']['LorR.xlsx']) * config['practice_reps'])
         namespace['saveData'](experiment)
         saved = True
         result['status'] = 'aborted' if aborted else 'completed'
@@ -244,6 +251,13 @@ def run_worker(request_path):
                 except Exception as exc:
                     cleanup_errors.append(f'Data handler cleanup: {exc}')
         if connection is not None:
+            result['triggers'] = connection.summary()
+            try:
+                trigger_log = session_dir / 'trigger_log.csv'
+                connection.export(trigger_log)
+                result['trigger_log'] = str(trigger_log)
+            except Exception as exc:
+                cleanup_errors.append(f'Trigger log save failed: {exc}')
             try:
                 connection.close()
             except Exception as exc:

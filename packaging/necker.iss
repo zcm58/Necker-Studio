@@ -1,6 +1,6 @@
 #define AppName "Nicholas's Nice Necker Cube Experiment"
 #ifndef AppVersion
-  #define AppVersion "1.0"
+  #define AppVersion "1.1"
 #endif
 #ifndef BundleRoot
   #error BundleRoot must name the verified release bundle.

@@ -712,6 +712,7 @@ class NeckerApp(tk.Tk):
         self._set_busy(True)
         try:
             config = validate_settings(copy.deepcopy(self.config))
+            runtime.require_trigger_output(config)
             if config["test_mode"]:
                 if not self._confirm_test_mode():
                     self.status.set("Test launch cancelled.")
