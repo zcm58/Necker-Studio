@@ -16,3 +16,5 @@ data/
 .env
 .env.*
 !.env.example
+updates.json
+updates.json.tmp
