@@ -94,12 +94,15 @@ begin
   Result := (not VerificationFailed) and (Pos('/NOLAUNCH=1', Uppercase(GetCmdTail)) = 0);
 end;
 
-function NeedsFile(Hash: String): Boolean;
+function NeedsFile(Relative, Hash: String): Boolean;
+var
+  Filename: String;
 begin
+  Filename := AddBackslash(ExpandConstant('{app}')) + Relative;
   Result := True;
-  if FileExists(CurrentFileName) then begin
+  if FileExists(Filename) then begin
     try
-      Result := Lowercase(GetSHA256OfFile(CurrentFileName)) <> Hash;
+      Result := Lowercase(GetSHA256OfFile(Filename)) <> Hash;
     except
       Result := True;
     end;

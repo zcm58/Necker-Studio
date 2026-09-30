@@ -73,6 +73,10 @@ def main():
     install('Setup-1.1')
     assert registered() == '1.1'
     user_file = installed / 'user-note.txt'; user_file.write_text('preserve')
+    linked = root / 'linked-runtime.bin'
+    linked.hardlink_to(installed / 'runtime/python.exe')
+    install('Patch-1.1-to-1.2', expected=1)
+    linked.unlink()
     (installed / 'runtime/python.exe').write_text('unexpected modification')
     old = (installed / 'app/main.py').read_bytes()
     install('Patch-1.1-to-1.2', expected=1)
@@ -91,6 +95,10 @@ def main():
     assert not (installed / 'necker-patch-pending.txt').exists()
     assert (installed / 'app/new.py').is_file()
     install('Patch-1.1-to-1.2', expected=1)  # Wrong baseline, no implicit downgrade/retry.
+    # An arbitrary timestamp distinguishes a skipped file from a rewrite that
+    # merely restores the original packaged timestamp.
+    stamp += 13000000000
+    os.utime(installed / 'runtime/python.exe', ns=(stamp, stamp))
     install('Setup-1.2')
     assert (installed / 'runtime/python.exe').stat().st_mtime_ns == stamp
     # A failed target verification returns the required repair exit code.
@@ -106,7 +114,7 @@ def main():
     assert user_file.read_text() == 'preserve'
     report = {'passed':True,'registration':guid,'fresh_install':True,'tampered_baseline_blocked':True,
               'partial_patch_recovered':True,'wrong_source_blocked':True,'runtime_not_rewritten':True,
-              'full_repair':True,'target_mismatch_exit_12':True,'uninstall_preserved_unknown_files':True}
+              'full_repair':True,'hardlinks_rejected':True,'target_mismatch_exit_12':True,'uninstall_preserved_unknown_files':True}
     (root / 'report.json').write_text(json.dumps(report,indent=2))
     print(root / 'report.json', flush=True)
 

@@ -17,6 +17,33 @@ internal static class Safety
     }
     [DllImport("kernel32.dll", SetLastError=true)]
     private static extern bool GetFileInformationByHandle(SafeFileHandle handle, out FileInfo info);
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    private static extern SafeFileHandle CreateFile(string path, uint access, uint share,
+        IntPtr security, uint disposition, uint flags, IntPtr template);
+    // Keep each checked ancestor pinned for this short-lived verifier/helper process.
+    // Denying delete sharing prevents it being replaced by a junction after checking.
+    private static readonly Dictionary<string, SafeFileHandle> Directories =
+        new Dictionary<string, SafeFileHandle>(StringComparer.OrdinalIgnoreCase);
+
+    private static void PinDirectory(string path)
+    {
+        if (String.IsNullOrEmpty(path) || Directories.ContainsKey(path)) return;
+        PinDirectory(Path.GetDirectoryName(path));
+        if (!Directory.Exists(path))
+        {
+            if (File.Exists(path)) throw new IOException("An update directory is occupied by a file.");
+            return; // A new full-install directory may not exist yet.
+        }
+        var handle = CreateFile(path, 0x80, 3, IntPtr.Zero, 3, 0x02200000, IntPtr.Zero);
+        FileInfo info;
+        if (handle.IsInvalid || !GetFileInformationByHandle(handle, out info) ||
+            (info.Attributes & 0x400) != 0 || (info.Attributes & 0x10) == 0)
+        {
+            handle.Dispose();
+            throw new IOException("An update directory is linked or cannot be pinned.");
+        }
+        Directories.Add(path, handle);
+    }
 
     public static string Root(string path)
     {
@@ -33,30 +60,29 @@ internal static class Safety
     public static void CheckPath(string path)
     {
         string full = Path.GetFullPath(path);
-        for (string part = full; !String.IsNullOrEmpty(part); part = Path.GetDirectoryName(part))
+        PinDirectory(Path.GetDirectoryName(full));
+        try
         {
-            try
-            {
-                FileAttributes attributes = File.GetAttributes(part);
-                if ((attributes & FileAttributes.ReparsePoint) != 0)
-                    throw new IOException("Linked update paths are not supported.");
-            }
-            catch (FileNotFoundException) { }
-            catch (DirectoryNotFoundException) { }
+            FileAttributes attributes = File.GetAttributes(full);
+            if ((attributes & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Linked update paths are not supported.");
+            if ((attributes & FileAttributes.Directory) != 0) PinDirectory(full);
         }
+        catch (FileNotFoundException) { }
+        catch (DirectoryNotFoundException) { }
     }
 
     public static FileStream OpenRead(string path)
     {
-        CheckPath(path);
-        var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        PinDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
+        var handle = CreateFile(path, 0x80000000, 1, IntPtr.Zero, 3, 0x08200000, IntPtr.Zero);
         FileInfo info;
-        if (!GetFileInformationByHandle(stream.SafeFileHandle, out info) || info.Links != 1 || (info.Attributes & 0x400) != 0)
+        if (handle.IsInvalid || !GetFileInformationByHandle(handle, out info) || info.Links != 1 || (info.Attributes & 0x410) != 0)
         {
-            stream.Dispose();
+            handle.Dispose();
             throw new IOException("Update files must be regular files with one link.");
         }
-        return stream;
+        return new FileStream(handle, FileAccess.Read, 65536);
     }
 
     public static string Hash(Stream stream)

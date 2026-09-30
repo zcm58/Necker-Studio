@@ -66,7 +66,8 @@ def prepare(bundle, output, baseline=None, baseline_sha256=None, from_version=No
         flags = 'ignoreversion' + (' solidbreak' if group != previous_group else '')
         directory = str(PureWindowsPath(name).parent)
         destination = '{app}' + (('\\' + directory) if directory != '.' else '')
-        lines.append(f'Source: "{bundle / name}"; DestDir: "{destination}"; Flags: {flags}; Check: NeedsFile(\'{target[name]}\')')
+        relative = str(PureWindowsPath(name)).replace("'", "''")
+        lines.append(f'Source: "{bundle / name}"; DestDir: "{destination}"; Flags: {flags}; Check: NeedsFile(\'{relative}\', \'{target[name]}\')')
         previous_group = group
     (output / 'payload.iss').write_text('\n'.join(lines) + '\n', encoding='utf-8-sig')
     record = {'version': version, 'from_version': from_version, 'source_inventory_sha256': baseline_sha256,
