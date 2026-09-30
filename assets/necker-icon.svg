@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>Necker cube</title>
+  <defs><g id="edges" fill="none" stroke-linecap="round">
+    <path d="M 40 96 L 160 96"/>
+    <path d="M 160 96 L 160 216"/>
+    <path d="M 160 216 L 40 216"/>
+    <path d="M 40 216 L 40 96"/>
+    <path d="M 96 40 L 216 40"/>
+    <path d="M 216 40 L 216 160"/>
+    <path d="M 216 160 L 96 160"/>
+    <path d="M 96 160 L 96 40"/>
+    <path d="M 40 96 L 96 40"/>
+    <path d="M 160 96 L 216 40"/>
+    <path d="M 160 216 L 216 160"/>
+    <path d="M 40 216 L 96 160"/>
+  </g></defs>
+  <use href="#edges" stroke="#ffffff" stroke-width="14"/>
+  <use href="#edges" stroke="#087e83" stroke-width="10"/>
+</svg>

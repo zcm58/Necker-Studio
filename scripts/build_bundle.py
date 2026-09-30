@@ -78,12 +78,13 @@ def main():
         '[assembly: AssemblyTitle("Nicholas\'s Nice Necker Cube Experiment")]\n'
         f'[assembly: AssemblyVersion("{version}.0.0")]\n'
         f'[assembly: AssemblyFileVersion("{version}.0.0")]\n', encoding='utf-8')
+    icon = PROJECT / 'assets' / 'necker.ico'
     compiler = Path('C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe')
     subprocess.run([str(compiler), '/nologo', '/target:winexe', '/platform:x64',
-                    '/reference:System.Windows.Forms.dll', f'/out:{output / "NeckerExperiment.exe"}',
+                    '/reference:System.Windows.Forms.dll', f'/win32icon:{icon}', f'/out:{output / "NeckerExperiment.exe"}',
                     str(PROJECT / 'packaging' / 'launcher.cs'), str(assembly)], check=True)
     subprocess.run([str(compiler), '/nologo', '/target:exe', '/platform:x64',
-                    '/reference:System.Windows.Forms.dll', f'/out:{output / "NeckerUpdater.exe"}',
+                    '/reference:System.Windows.Forms.dll', f'/win32icon:{icon}', f'/out:{output / "NeckerUpdater.exe"}',
                     str(PROJECT / 'packaging' / 'update_safety.cs'),
                     str(PROJECT / 'packaging' / 'updater.cs'), str(assembly)], check=True)
     subprocess.run([str(compiler), '/nologo', '/target:exe', '/platform:x64',

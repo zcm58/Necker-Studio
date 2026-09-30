@@ -558,6 +558,8 @@ class NeckerApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title(APP_NAME)
+        if sys.platform == "win32":
+            self.iconbitmap(default=str(APP_DIR / "assets" / "necker.ico"))
         _apply_theme(self)
         _fit_window(self, 960, 760)
         self.handle = None

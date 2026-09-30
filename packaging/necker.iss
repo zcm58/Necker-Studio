@@ -1,6 +1,6 @@
 #define AppName "Nicholas's Nice Necker Cube Experiment"
 #ifndef AppVersion
-  #define AppVersion "1.2"
+  #define AppVersion "1.3"
 #endif
 #ifndef AppIdGuid
   #define AppIdGuid "5FC7235D-8D03-4668-9F37-508A1B481689"
@@ -40,6 +40,7 @@ OutputDir={#InstallerOutput}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\assets\necker.ico
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
