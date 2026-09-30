@@ -12,7 +12,7 @@ import tomllib
 
 PROJECT = Path(__file__).resolve().parents[1]
 APP_FILES = ('main.py', 'gui.py', 'settings.py', 'runtime.py', 'adapter.py', 'triggers.py',
-             'participant.py', 'presentation.py', 'window_layout.py', 'app_paths.py',
+             'updates.py', 'update_ui.py', 'participant.py', 'presentation.py', 'window_layout.py', 'app_paths.py',
              'defaults.json', 'README.md', 'requirements.txt', 'requirements.in', 'pyproject.toml')
 
 
@@ -38,7 +38,7 @@ def main():
     # A release must pass the transport, normal/test-mode selection, source-site
     # and worker error/export regressions; none of these tests touch hardware.
     subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests',
-                    '-p', 'test_trigger*.py', '-q'], cwd=PROJECT, check=True)
+                    '-p', 'test_*.py', '-q'], cwd=PROJECT, check=True)
     runtime = output / 'runtime'
     runtime.mkdir(parents=True)
     base = Path(sys.base_prefix)
@@ -82,10 +82,18 @@ def main():
     subprocess.run([str(compiler), '/nologo', '/target:winexe', '/platform:x64',
                     '/reference:System.Windows.Forms.dll', f'/out:{output / "NeckerExperiment.exe"}',
                     str(PROJECT / 'packaging' / 'launcher.cs'), str(assembly)], check=True)
+    subprocess.run([str(compiler), '/nologo', '/target:exe', '/platform:x64',
+                    '/reference:System.Windows.Forms.dll', f'/out:{output / "NeckerUpdater.exe"}',
+                    str(PROJECT / 'packaging' / 'update_safety.cs'),
+                    str(PROJECT / 'packaging' / 'updater.cs'), str(assembly)], check=True)
+    subprocess.run([str(compiler), '/nologo', '/target:exe', '/platform:x64',
+                    '/reference:System.Web.Extensions.dll', f'/out:{output.parent / "NeckerSetupVerifier.exe"}',
+                    str(PROJECT / 'packaging' / 'update_safety.cs'),
+                    str(PROJECT / 'packaging' / 'setup_verifier.cs')], check=True)
     probe = ('import sys, tkinter, psychopy, serial, pyWinhook, pyglet; '
              'assert sys.version_info[:3] == (3,12,14); '
              'assert psychopy.__version__ == "2026.2.4"; '
-             'import psychopy.visual, psychopy.sound, psychopy.iohub; import triggers; '
+             'import psychopy.visual, psychopy.sound, psychopy.iohub; import triggers, updates, update_ui; '
              'print("Bundled Python, Tk, PsychoPy, audio, ioHub and serial imports passed.")')
     subprocess.run([str(runtime / 'python.exe'), '-E', '-s', '-B', '-c', probe], check=True, cwd=app)
     trigger_probe = (

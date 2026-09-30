@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+from update_ui import UpdateController, UpdateSettings
 from tkinter import filedialog, messagebox, ttk
 
 if __package__:
@@ -459,7 +460,9 @@ class SettingsDialog(tk.Toplevel):
             editor = ConditionEditor(conditions, filename, self.draft["conditions"][filename])
             self.editors[filename] = editor
             conditions.add(editor, text=filename.removesuffix(".xlsx"))
-        self.section_selector = _section_selector(header, self.notebook, list(groups) + ["Conditions"])
+        self.update_settings = UpdateSettings(self.notebook)
+        self.notebook.add(self.update_settings, text="Updates")
+        self.section_selector = _section_selector(header, self.notebook, list(groups) + ["Conditions", "Updates"])
         footer = self.footer = FlowButtons(self, padding=(18, 12, 18, 16))
         footer.pack(side="bottom", fill="x", before=self.notebook)
         footer.add("Save settings", self.save, style="Primary.TButton")
@@ -538,6 +541,7 @@ class SettingsDialog(tk.Toplevel):
     def save(self) -> None:
         try:
             config = self.collect()
+            self.update_settings.save()
             save_settings(config)
         except (ValueError, OSError) as exc:
             messagebox.showerror("Settings could not be saved", str(exc), parent=self)
@@ -571,6 +575,7 @@ class NeckerApp(tk.Tk):
         self.status = tk.StringVar(self)
         self.output_text = tk.StringVar(self)
         self.setup_text = tk.StringVar(self)
+        self.updater = UpdateController(self)
         self._create_menu()
         self._create_page()
         self.refresh_summary()
@@ -578,12 +583,14 @@ class NeckerApp(tk.Tk):
         self.bind("<Control-comma>", lambda _event: self.open_settings())
         if self._startup_error:
             self.after_idle(self._show_startup_error)
+        self.updater.schedule()
 
     def _create_menu(self) -> None:
         menu = tk.Menu(self)
         self.file_menu = tk.Menu(menu, tearoff=False)
         self.file_menu.add_command(label="Settings…", accelerator="Ctrl+,", command=self.open_settings)
         self.file_menu.add_command(label="Open output folder", command=self.open_output)
+        self.file_menu.add_command(label="Check for updates…", command=self.updater.open)
         self.file_menu.add_separator()
         self.file_menu.add_command(label="Exit", command=self.close)
         menu.add_cascade(label="File", menu=self.file_menu)
@@ -692,6 +699,7 @@ class NeckerApp(tk.Tk):
         self.start_button.configure(state="disabled" if busy else "normal")
         self.settings_button.configure(state="disabled" if busy else "normal")
         self.file_menu.entryconfigure(0, state="disabled" if busy else "normal")
+        self.file_menu.entryconfigure(2, state="disabled" if busy else "normal")
 
     def _participant_details(self):
         return ParticipantDialog(self).show()
@@ -708,6 +716,7 @@ class NeckerApp(tk.Tk):
     def start(self) -> None:
         if self.busy:
             return
+        self.updater.pause_for_session()
         self._launching = True
         self._set_busy(True)
         try:
@@ -838,6 +847,8 @@ class NeckerApp(tk.Tk):
             if messagebox.askyesno("Stop and close?", f"A session is active. Request a safe stop, wait for data to save, and close {APP_NAME}?", parent=self):
                 self._closing = True
                 self.stop()
+            return
+        if self.updater.close_app():
             return
         self.destroy()
 

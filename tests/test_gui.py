@@ -60,6 +60,8 @@ class GuiSmokeTests(unittest.TestCase):
             patch.object(gui.messagebox, "askyesno", return_value=True),
             patch.object(gui.NeckerApp, "_participant_details", return_value=PARTICIPANT),
             patch.object(gui.NeckerApp, "_confirm_recording", return_value=True),
+            patch("update_ui.updates.save_preferences"),
+            patch("update_ui.updates.load_preferences", return_value={"automatic": False}),
         ]
         mocks = [p.start() for p in self.patches]
         self.saved, self.error = mocks[1], mocks[2]
@@ -87,6 +89,41 @@ class GuiSmokeTests(unittest.TestCase):
                     self.assertGreaterEqual(widget.winfo_width() + 1, widget.winfo_reqwidth(), str(widget))
                     self.assertGreaterEqual(widget.winfo_height() + 1, widget.winfo_reqheight(), str(widget))
             self._assert_controls_fit(widget)
+
+    def test_update_dialog_fits_and_offers_checked_download(self):
+        import updates
+        asset = updates.Asset("package.exe", 1, 1000000, "a"*64, "1.3")
+        result = updates.Release("1.3", asset, asset)
+        with patch.object(self.app.updater, "_check", return_value=result):
+            self.app.updater.open()
+            deadline = time.monotonic() + 3
+            while self.app.updater.working and time.monotonic() < deadline:
+                self.app.update()
+                time.sleep(.02)
+        dialog = self.app.updater.dialog
+        dialog.geometry("520x320")
+        self.app.update()
+        self._assert_controls_fit(dialog)
+        self.assertEqual(self.app.updater.selected(), asset)
+        self.assertFalse(self.app.updater.action.instate(["disabled"]))
+        self.app.updater.close_dialog()
+
+    def test_updates_cannot_open_during_a_session(self):
+        self.app._launching = True
+        self.app._set_busy(True)
+        with patch.object(self.app.updater, "_job") as job:
+            self.app.updater.open()
+            job.assert_not_called()
+        self.assertEqual(self.app.file_menu.entrycget(2, "state"), "disabled")
+        self.app._launching = False
+
+    def test_install_requires_confirmation(self):
+        self.app.updater._make_dialog()
+        self.app.updater.path = Path("download.exe")
+        with patch.object(gui.messagebox, "askyesno", return_value=False), patch.object(self.app.updater, "_job") as job:
+            self.app.updater.install()
+            job.assert_not_called()
+        self.app.updater.close_dialog()
 
     def test_minimum_layout_and_all_settings_tabs(self):
         self.app.geometry("680x520")

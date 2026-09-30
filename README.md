@@ -102,7 +102,7 @@ Version 1.1 adds the applicable BioSemi safeguards from FPVS Studio (reference c
 
 Every run exports `trigger_log.csv`; `result.json` includes trigger counts and transport identity. `sent` means the serial API accepted one byte, not proof of BioSemi acquisition. The log clock is seconds since connection construction, not a frame-onset timestamp. No log file IO occurs during stimulus presentation. A normal completed run must match the original schedule: two initialization markers plus one per practice trial. Aborted runs retain their partial audit without being treated as completed.
 
-The bundle build runs the trigger regression suite before packaging and probes the checked transport inside the packaged interpreter. These checks use fake serial devices and never send codes to acquisition hardware. Physical cable/status-channel receipt still needs a BioSemi recording check.
+The bundle build runs all non-GUI regression tests before packaging and probes the checked transport inside the packaged interpreter. These checks use fake serial devices and never send codes to acquisition hardware. Physical cable/status-channel receipt still needs a BioSemi recording check.
 
 The supplied error log fails at the **second open of COM3**. The original generated script opens the same exclusive port twice. This app owns one connection and reuses it for both calls, then closes it on completion, Escape, operator stop, or failure. Repeated close requests are harmless. A regression test uses a fake exclusive serial port that would fail on a second open.
 
@@ -126,13 +126,46 @@ The **Open output folder** and **View run log** buttons provide access. A stop o
 
 Run the automated tests with `python -m unittest discover -s tests -v` from this folder. The tests do not require PsychoPy, a display, or serial hardware. They cover the protocol, condition fixtures, timing changes, response semantics, saved settings, invalid settings, output isolation, audio compatibility, and the exclusive-port regression.
 
-Thirteen additional Tk interface tests are opt-in: set `NECKER_GUI_SMOKE=1` in the test run's environment. They briefly open windows but never launch an experiment or contact hardware. All **88 tests**, including these interface tests, passed on the development machine. Coverage includes saved-folder migration, locked COM3, required demographics, fresh typed recording confirmation, cancellation, settings at minimum size and with larger text, test-mode hardware suppression, separate test output, installed paths, screen margins, and restoration of normal launch checks. The generated stimulus source is identical when only test mode is toggled.
+Sixteen additional Tk interface tests are opt-in: set `NECKER_GUI_SMOKE=1` in the test run's environment. They briefly open windows but never launch an experiment or contact hardware. All **107 tests**, including these interface tests, passed on the development machine. Coverage includes saved-folder migration, locked COM3, required demographics, fresh typed recording confirmation, cancellation, settings at minimum size and with larger text, test-mode hardware suppression, separate test output, installed paths, screen margins, and restoration of normal launch checks. The generated stimulus source is identical when only test mode is toggled.
 
 A full-screen test-mode session completed all 30 accelerated trials and four demonstrations with serial access explicitly blocked. Its CSV rows correctly identify the TEST participant, test mode, disabled serial hardware, and absent recording confirmation.
 
 Validation on **Python 3.12.14 with PsychoPy 2026.2.4** included a complete accelerated 30-trial session plus four demonstrations with simulated responses. All phases completed, outputs were saved, and the process exited successfully. Earlier validation also included the Tk settings/run-state interface and a real PsychoPy startup with cooperative abort and saved data. The complete session produced CSV, psydat, and log files and reached the thanks screen. Test output is separate from participant output. The revised layout was checked at 1920×1080 full screen, 1280×720 and 800×600 using a 53 cm monitor width and 80 cm viewing distance: all instruction bounds fit within the margins, paired text/artwork do not overlap, and trial cube geometry is unchanged. Physical COM3 trigger delivery and laboratory audiovisual timing have not been measured.
 
 `reference/experiment_source.py` is the unchanged September 29, 2026 generated script (PsychoPy 2026.2.3). `adapter.py` makes explicit, checked substitutions for settings and application integration while retaining the original frame loops. Replacing the reference requires reviewing the adapter and tests; its checksum deliberately rejects unreviewed changes.
+
+## Automatic updates and smaller installers
+
+Version 1.2 follows FPVS Studio's update workflow with a small native helper, adapted
+for this Tk/Python application. Installed copies check the public GitHub releases in
+the background at startup. **File > Check for updates** checks manually; **File >
+Settings > Updates** controls startup checks. Checks do not download or install
+anything automatically. Download the offered package, then choose **Install update**
+and confirm. The application closes, setup runs, and the helper restarts the installed
+application only after success. Updates cannot be installed during an experiment.
+PyCharm source checkouts are never overwritten by the installer workflow.
+
+Routine releases offer a direct patch for a specific previous version. The updater
+verifies GitHub's release/asset identity, size and SHA-256, including the patch metadata.
+It selects a patch only when the registered version and installed inventory match;
+otherwise the full installer remains available. Patch discovery is quick and does not
+scan the entire runtime. Native setup verifies the full baseline before changes and
+checks the complete target afterward. A durable marker allows retrying a recognized
+interrupted patch; unknown/corrupt states require the full installer. Failed target
+verification returns exit code 12 and prevents automatic restart.
+
+Patches replace changed application files without downloading or rewriting unchanged
+Python/PsychoPy packages. Full installers also skip files whose SHA-256 already matches,
+with separate compression blocks for the runtime and application. First installs still
+include the complete pinned environment. Removing a runtime dependency simply to reduce
+size could change the experiment's behavior; the runtime is retained intact.
+
+The shared installer identity preserves settings and results. Update preferences are
+stored separately in `updates.json` in the user state directory. Downloads are held in
+`%LOCALAPPDATA%/NicholasNiceNeckerCubeExperiment/updates`, with a cross-process lock,
+one recognized cached installer, cancellation cleanup and a staged helper. Unknown
+files and directories are not recursively deleted. The repository is public and no
+GitHub token is needed. Offline startup failures stay quiet; a manual check reports them.
 
 ## Build the Windows installer
 
@@ -142,7 +175,7 @@ With a clean committed checkout, the verified project environment and Inno Setup
 powershell -ExecutionPolicy Bypass -File scripts/build_installer.ps1
 ```
 
-This builds a native windowed launcher, copies the local CPython runtime and pinned site-packages into a relocatable bundle, verifies imports and dependencies, then compiles `packaging/necker.iss`. It does not install or update global packages. Output is the versioned x64 installer, SHA256SUMS.txt and release.json in `dist`. The bundle contains application source and dependency license files; it excludes saved settings, participant data and personal interpreter paths.
+This builds a native windowed launcher, copies the local CPython runtime and pinned site-packages into a relocatable bundle, verifies imports and dependencies, then compiles `packaging/necker.iss`. It does not install or update global packages. Output includes the versioned x64 installer, update JSON, SHA256SUMS.txt and release.json in `dist`. The bundle contains application source and dependency license files; it excludes saved settings, participant data and personal interpreter paths.
 
 Use `-BundleOnly` to inspect and test a bundle before compiling, then `-ExistingBundle <path>` to compile that verified bundle. `-Iscc <path>` selects a different installed Inno Setup compiler.
 
@@ -154,3 +187,22 @@ Opt-in desktop checks:
 ```
 
 The first checks real rendered bounds and captures every instruction page at three sizes using a 53 cm screen width and 80 cm viewing distance. The second runs the full phase sequence with shortened timings, simulated responses and blocked serial hardware. These are functional checks; they do not measure acquisition hardware timing.
+
+For a direct patch, supply the exact retained published bundle and its authenticated
+inventory digest. Never rebuild an old tag to invent a baseline:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_installer.ps1 -BaselineBundle <published-bundle> -BaselineManifestSha256 <sha256>
+```
+
+The target bundle must be committed and verified. The native setup verifier uses
+Windows/.NET and does not depend on the installed Python. A patch cannot remove or
+rename files; a release with such changes uses its full installer. Publish the full
+installer, patch, versioned update JSON, checksum and release/validation reports together.
+Keep release descriptions short. Never replace published installers under an old version.
+
+Run `scripts/verify_patch_lifecycle.py` for isolated native acceptance. It uses a unique
+fixture registration, no shortcuts, no app launch and no acquisition hardware. It covers
+fresh installs, corrupted baselines, interrupted-patch recovery, wrong source versions,
+unchanged-runtime preservation, full repair, failure exit codes and uninstall. Fixture
+reports remain under ignored `build/` folders for review.
